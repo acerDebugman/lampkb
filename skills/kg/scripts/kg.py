@@ -5,6 +5,7 @@
 #     "rapidfuzz",
 #     "datasketch",
 #     "pypdf",
+#     "jieba",
 # ]
 # ///
 """kg — documents-only knowledge-graph tool.
