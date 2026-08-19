@@ -1,0 +1,3 @@
+# Python bytecode / compilation artifacts
+__pycache__/
+*.py[cod]
