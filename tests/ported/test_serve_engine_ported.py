@@ -60,7 +60,7 @@ def test_find_node_matches_full_punctuated_unicode_label():
 
 
 def test_find_node_matches_punctuated_file_label_exactly():
-    # #1704: an exactly-typed punctuated file label must resolve through explain,
+    # An exactly-typed punctuated file label must resolve through explain,
     # just like it does through path/query.
     G = nx.Graph()
     G.add_node("f1", label="blockStream.md", norm_label="blockstream.md",
@@ -72,7 +72,7 @@ def test_find_node_matches_punctuated_file_label_exactly():
 
 
 def test_find_node_resolves_when_label_and_norm_label_diverge():
-    # #1704 hardening: when `label` and `norm_label` diverge, only the symmetric
+    # Hardening: when `label` and `norm_label` diverge, only the symmetric
     # `norm_query == norm_label` match resolves it.
     G = nx.Graph()
     G.add_node("n1", label="BlockStream", norm_label="blockstream.md",
@@ -81,7 +81,7 @@ def test_find_node_resolves_when_label_and_norm_label_diverge():
 
 
 def test_find_node_matches_punctuated_node_id_exactly():
-    # #2467: only the symmetric `norm_query == nid_norm` match resolves an
+    # Only the symmetric `norm_query == nid_norm` match resolves an
     # exactly-typed node id carrying punctuation.
     G = nx.Graph()
     G.add_node("concept:domain:widget", label="Widget", norm_label="widget",
@@ -94,7 +94,7 @@ def test_find_node_matches_punctuated_node_id_exactly():
 
 
 def test_find_node_matches_namespaced_node_id():
-    # #2467: a "<repo>::"-namespaced id (upstream's merge-graphs prefixer) must
+    # A "<repo>::"-namespaced id (upstream's merge-graphs prefixer) must
     # resolve by exact id — the engine-side tiering is what matters here.
     G = nx.Graph()
     G.add_node("backend::docs_server_router", label="Router",
@@ -151,11 +151,11 @@ def test_node_search_text_includes_all_matched_fields():
     assert parts[2] == "punct"                # nid
     assert parts[3] == "pkg/foobar.md"        # source_file
     assert parts[4] == "pkg foobar md"        # source_file tokens
-    assert len(parts) == 5                    # no folded-id field for an ASCII id (#2467)
+    assert len(parts) == 5                    # no folded-id field for an ASCII id
 
 
 def test_node_search_text_appends_folded_non_ascii_node_id():
-    # #2467: for a Hangul id the raw and folded forms differ; the index has to
+    # For a Hangul id the raw and folded forms differ; the index has to
     # carry the folded form too, appended so the other field positions do not move.
     G = _make_non_ascii_id_graph()
     nid = "concept:domain:한글"
@@ -211,7 +211,7 @@ def test_find_node_prefilter_is_identical_to_full_scan(monkeypatch):
 
 
 def test_find_node_matches_non_ascii_node_id_through_prefilter():
-    # #2467: queries fold through `_strip_diacritics`; the index must carry the
+    # Queries fold through `_strip_diacritics`; the index must carry the
     # folded id form or the node is dropped before any predicate runs.
     G = _make_non_ascii_id_graph()
     for nid in ("concept:domain:한글", "문서_목록"):
@@ -224,7 +224,7 @@ def test_find_node_matches_non_ascii_node_id_through_prefilter():
 
 
 def test_find_node_node_id_prefilter_is_identical_to_full_scan(monkeypatch):
-    # #2467: an id must resolve the same way whether the candidates came from the
+    # An id must resolve the same way whether the candidates came from the
     # trigram index or from the full scan.
     G = _make_non_ascii_id_graph()
     for label in ["concept:domain:한글", "문서_목록", "id7", "item node 7",
@@ -276,10 +276,10 @@ def test_trigram_index_cached_and_rebuilt_per_graph():
     assert _get_trigram_index(G2) is not idx1       # a fresh graph rebuilds (reload safety)
 
 
-# --- German/CJK query handling (#1900) -------------------------------------------
+# --- German/CJK query handling ----------------------------------------------------
 
 def test_pick_seeds_german_query_seeds_content_node_not_heading_noise():
-    """End-to-end for #1900: a German question over a graph with German
+    """End-to-end: a German question over a graph with German
     heading-noise nodes must seed on the content noun, not on nodes that
     happen to contain 'die'/'wie'/'wird'."""
     G = nx.DiGraph()
@@ -291,7 +291,7 @@ def test_pick_seeds_german_query_seeds_content_node_not_heading_noise():
 
     q = "Wie funktioniert die Authentifizierung?"
     terms = _query_terms(q)
-    # #1918: _score_query does combined scoring + per-term singleton winners in
+    # _score_query does combined scoring + per-term singleton winners in
     # one traversal; _pick_seeds consumes best_seed_by_term for the per-term
     # guarantee.
     qs = _score_query(G, terms, collect_per_term_seeds=True)

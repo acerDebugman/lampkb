@@ -14,7 +14,7 @@ _NODES_RE = re.compile(r"(\d+)\s+nodes?\s+found")
 
 
 def _log_path() -> Path | None:
-    # Opt-in only (#1797). The log records every query/path/explain question and
+    # Opt-in only. The log records every query/path/explain question and
     # corpus path (and full responses if KG_QUERY_LOG_RESPONSES) in a
     # plaintext file under ~/.cache — outside any repo's .gitignore/retention. A
     # default-on record of proprietary queries contradicts graphify's on-device,

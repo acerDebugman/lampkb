@@ -1,7 +1,7 @@
-# Ported from graphify/tests/test_word_count_cache.py (in full — #1656 word-count
+# Ported from graphify/tests/test_word_count_cache.py (in full — word-count
 # caching is docs-relevant: detect() counts words in every PDF/markdown file) and
-# the source_file portability section of graphify/tests/test_cache.py
-# (#777/#1989). graphify -> kglib.
+# the source_file portability section of graphify/tests/test_cache.py.
+# graphify -> kglib.
 #
 # kind="ast" note: kg drops the AST cache's per-version namespace, but
 # save_cached/load_cached/cache_dir still accept kind="ast" as a plain
@@ -28,7 +28,7 @@ def _settle(path: Path) -> None:
     os.utime(path, ns=(old, old))
 
 
-# --- word-count cache (#1656) -------------------------------------------------
+# --- word-count cache ---------------------------------------------------------
 
 def test_word_count_cached_until_file_changes(tmp_path, monkeypatch):
     # Isolate the stat index to this tmp root.
@@ -71,13 +71,13 @@ def test_word_count_augments_existing_hash_entry(tmp_path, monkeypatch):
     assert cache.file_hash(f, tmp_path) == h
     key = str(cache._normalize_path(f).resolve())
     entry = cache._stat_index[key]
-    # #1989: digests are now stored per salt under "hashes" (salt = path relative
+    # Digests are now stored per salt under "hashes" (salt = path relative
     # to root == "m.md" here), co-located with the word_count.
     assert entry.get("hashes", {}).get("m.md") == h and entry.get("word_count") == 3
 
 
 def test_file_hash_is_order_independent_across_roots(tmp_path, monkeypatch):
-    """#1989: the stat-index memo must be keyed by the salt (path relative to
+    """The stat-index memo must be keyed by the salt (path relative to
     root) that enters the digest, so the same (file, root) returns the same
     digest regardless of what root was hashed first."""
     monkeypatch.setattr(cache, "_stat_index", {})
@@ -106,7 +106,7 @@ def test_file_hash_is_order_independent_across_roots(tmp_path, monkeypatch):
 
 
 def test_file_hash_ignores_legacy_unsalted_entry(tmp_path, monkeypatch):
-    """A pre-#1989 entry carrying a bare "hash" (no salt) is never trusted."""
+    """A legacy entry carrying a bare "hash" (no salt) is never trusted."""
     monkeypatch.setattr(cache, "_stat_index", {})
     monkeypatch.setattr(cache, "_stat_index_root", None)
     f = tmp_path / "m.md"; f.write_text("# a b\n")
@@ -119,7 +119,7 @@ def test_file_hash_ignores_legacy_unsalted_entry(tmp_path, monkeypatch):
     assert "hash" not in entry and entry["hashes"]["m.md"] == exp
 
 
-# --- source_file portability (#777) -------------------------------------------
+# --- source_file portability --------------------------------------------------
 
 def test_save_cached_relativizes_source_file(tmp_path):
     """The on-disk cache JSON contains forward-slash relative source_file
@@ -213,7 +213,7 @@ def test_cache_portable_across_roots(tmp_path):
     assert not str(repo_a) in loaded["nodes"][0]["source_file"]
 
 
-# --- deep-mode semantic cache namespace (#1894) --------------------------------
+# --- deep-mode semantic cache namespace ---------------------------------------
 
 def test_semantic_cache_deep_mode_roundtrip_under_deep_namespace(tmp_path):
     """mode='deep' saves under cache/semantic-deep/ and reads back from it."""
@@ -226,7 +226,7 @@ def test_semantic_cache_deep_mode_roundtrip_under_deep_namespace(tmp_path):
 
 
 def test_semantic_cache_deep_invisible_to_plain_reads_and_vice_versa(tmp_path):
-    """#1894: deep-mode results never shadow standard-mode entries for the same
+    """Deep-mode results never shadow standard-mode entries for the same
     content (and vice versa)."""
     f = tmp_path / "doc.md"
     f.write_text("# Doc\n")

@@ -100,7 +100,7 @@ def run_benchmark(
     graph_path = graph_path or _default_graph_json()
     # Size-cap check + links/edges normalization + node-link parse. A raw
     # --no-cluster graph stores edges under "edges" and used to KeyError
-    # here (#2212).
+    # here.
     from kglib.paths import load_node_link_graph
     G = load_node_link_graph(graph_path)
 

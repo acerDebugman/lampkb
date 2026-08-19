@@ -13,7 +13,7 @@ def _portable_root_label(root: str) -> str:
     GRAPH_REPORT.md is a tracked artifact in practice, so its header must not
     bake the generator host's absolute path into the file: the same graph would
     otherwise produce different bytes on different machines and leak the build
-    machine's directory layout into git history (#2628, same class as #2598).
+    machine's directory layout into git history.
 
     Taking the basename strips any leading absolute path without touching the
     filesystem, and makes `graphify update .`, `graphify update ./proj`, and
@@ -171,7 +171,7 @@ def generate(
     # are only created by the opt-in `--obsidian` export, and the report is written
     # at build time (before any export runs), so emitting wikilinks by default left
     # every link dangling — polluting an Obsidian vault's graph view and rendering as
-    # literal brackets everywhere else (#1712). Emit wikilinks only when the caller
+    # literal brackets everywhere else. Emit wikilinks only when the caller
     # signals Obsidian output; otherwise a plain list, which navigates nowhere-to-break.
     if non_empty:
         lines += ["", "## Community Hubs (Navigation)"]
@@ -213,7 +213,7 @@ def generate(
     # Circular imports surfaced from file-level dependency graph. Only meaningful
     # for code — a documents-only corpus has no imports, so the section is pure
     # noise there ("None detected" on every run). Emit it only when the graph
-    # actually contains code (#1657).
+    # actually contains code.
     _has_code = any(
         d.get("file_type") == "code" for _, d in G.nodes(data=True)
     ) or any(

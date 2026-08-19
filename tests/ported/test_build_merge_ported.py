@@ -45,7 +45,7 @@ def _seed_12(tmp_path: Path) -> Path:
     return gp
 
 
-# ── #2497: identity-based shrink guard ─────────────────────────────────────
+# ── Identity-based shrink guard ────────────────────────────────────────────
 
 def test_legit_prune_driven_reduction_allowed(tmp_path):
     """The guard is ACTIVE with prune_sources, but a prune-explained loss
@@ -57,7 +57,7 @@ def test_legit_prune_driven_reduction_allowed(tmp_path):
 
 
 def test_legit_replacement_reduction_allowed(tmp_path):
-    """No #1116 false-refuse: a.md re-extracted with fewer symbols (10 -> 7)
+    """No false-refuse: a.md re-extracted with fewer symbols (10 -> 7)
     legitimately shrinks 12 -> 9."""
     gp = _seed_12(tmp_path)
     chunk = {"nodes": [_node(i, "a.md") for i in range(7)], "edges": []}
@@ -68,7 +68,7 @@ def test_legit_replacement_reduction_allowed(tmp_path):
 def test_unexplained_loss_blocked(tmp_path, monkeypatch):
     """A build that drops a node from an UNTOUCHED file (neither re-extracted
     nor pruned this run) must raise instead of silently destroying it — the
-    exact failure the dead #479 guard waved through (#2497)."""
+    exact failure the dead guard waved through."""
     gp = tmp_path / "kg-out" / "graph.json"
     _write_graph(
         gp,
@@ -100,9 +100,9 @@ def test_grow_and_equal_unaffected(tmp_path):
 
 
 def test_replacement_is_reported_and_own_file_loss_excused(tmp_path, capsys):
-    """Visibility (#2497): the replace-on-re-extract rebind is announced on
+    """Visibility: the replace-on-re-extract rebind is announced on
     stderr, and a re-extract that under-produces for its OWN file is excused
-    (owned by the extraction layer's incomplete-build guard, #1951)."""
+    (owned by the extraction layer's incomplete-build guard)."""
     gp = _seed_12(tmp_path)
     chunk = {"nodes": [_node(0, "a.md")], "edges": []}
     G = build_merge([chunk], gp, dedup=False)  # must not raise
@@ -110,7 +110,7 @@ def test_replacement_is_reported_and_own_file_loss_excused(tmp_path, capsys):
     assert "Replaced 10 node(s)" in capsys.readouterr().err
 
 
-# ── #1796: replace wins over delete ─────────────────────────────────────────
+# ── Replace wins over delete ───────────────────────────────────────────────
 
 def _seed_two_docs(tmp_path) -> Path:
     graph_path = tmp_path / "kg-out" / "graph.json"
@@ -130,7 +130,7 @@ def _seed_two_docs(tmp_path) -> Path:
 
 
 def test_reextracted_file_in_prune_sources_is_not_deleted(tmp_path):
-    """#1796: a file present in BOTH new_chunks (re-extracted) and prune_sources
+    """A file present in BOTH new_chunks (re-extracted) and prune_sources
     must be REPLACED, not deleted."""
     graph_path = _seed_two_docs(tmp_path)
     new_chunk = {"nodes": [
@@ -145,7 +145,7 @@ def test_reextracted_file_in_prune_sources_is_not_deleted(tmp_path):
 
 
 def test_genuine_deletion_still_prunes(tmp_path):
-    """#1796 guard must not break real deletions: a file in prune_sources but NOT
+    """The guard must not break real deletions: a file in prune_sources but NOT
     in new_chunks is still removed."""
     graph_path = _seed_two_docs(tmp_path)
     new_chunk = {"nodes": [
@@ -160,7 +160,7 @@ def test_genuine_deletion_still_prunes(tmp_path):
     assert "Widget Cache Design" in labels
 
 
-# ── #1574: hyperedge preservation across incremental updates ────────────────
+# ── Hyperedge preservation across incremental updates ──────────────────────
 
 def _seed_two_file_graph(tmp_path):
     root = tmp_path / "corpus"

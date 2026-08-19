@@ -186,7 +186,7 @@ def test_update_delete_shrink_guard_then_force(docs_corpus, ns, capsys, monkeypa
     merged = json.loads((docs_corpus / "kg-out" / ".kg_extract.json").read_text())
     assert not any("delta" in n["id"] for n in merged["nodes"]), "deleted file must be pruned"
 
-    # The #479 shrink-guard refuses the smaller graph...
+    # The shrink-guard refuses the smaller graph...
     capsys.readouterr()
     assert kg.cmd_build(ns(root=str(docs_corpus), directed=False, force=False)) == 1
     assert "refused to shrink" in capsys.readouterr().out

@@ -14,7 +14,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 # Output directory name — the literal "kg-out" (upstream made it an env-var
-# override; kg hardcodes it). Single source of truth in kglib.paths (#1423);
+# override; kg hardcodes it). Single source of truth in kglib.paths;
 # re-exported here as _KG_OUT for the existing call sites.
 from kglib.paths import KG_OUT as _KG_OUT
 
@@ -27,9 +27,9 @@ from kglib.paths import KG_OUT as _KG_OUT
 # Semantic cache entries are LLM output, so they depend on the extraction prompt
 # that produced them, not just on file contents. Keying purely on content means a
 # release that changes the prompt keeps replaying entries from the older prompt on
-# every unchanged file, silently mixing extraction vintages in one graph (#1939).
+# every unchanged file, silently mixing extraction vintages in one graph.
 # Versioning them by package version (as the AST cache does) would re-bill LLM
-# extraction on every patch release — the reason #1252 deliberately left them
+# extraction on every patch release — the reason they were deliberately left
 # unversioned. Fingerprinting the prompt itself keeps both properties: entries
 # survive releases that don't touch the prompt, and invalidate only when it
 # actually changed. Entries live under cache/semantic/p{fingerprint}/ when the
@@ -37,13 +37,13 @@ from kglib.paths import KG_OUT as _KG_OUT
 _PROMPT_FP_LEN = 12
 
 # Count of pre-fingerprint (flat-layout) entries served this process, so
-# check_semantic_cache can report N to the user (#1939).
+# check_semantic_cache can report N to the user.
 _legacy_semantic_hits = 0
 
 # Count of cache entries that failed to parse as JSON this process. A corrupt
 # entry is not a miss: left in place it fails on every future run, silently
 # re-extracting (and, for semantic kinds, re-billing) the file forever. The
-# counter lets check_semantic_cache surface one aggregate warning (#2405).
+# counter lets check_semantic_cache surface one aggregate warning.
 _corrupt_cache_entries = 0
 
 # Prompt-file fingerprints already computed, keyed by (path, size, mtime_ns) —
@@ -86,7 +86,7 @@ def _resolve_prompt_fp(prompt: "str | Path | None" = None,
     path substituted in — passing that path as ``prompt`` would hash the path
     string itself, yielding a fingerprint that is stable, plausible, and tracks
     nothing about the prompt. A silent wrong fingerprint is the exact failure
-    class #1939 is about, so the two are not inferred from each other.
+    class this guards against, so the two are not inferred from each other.
 
     Best-effort: an unreadable ``prompt_file`` falls back to the flat, unattributed
     layout rather than failing the run — a cache is never worth aborting an
@@ -116,7 +116,7 @@ def _resolve_prompt_fp(prompt: "str | Path | None" = None,
             f"could not read extraction prompt {str(prompt)!r} ({exc}); semantic cache "
             "entries cannot be attributed to a prompt version and fall back to the "
             "unversioned layout, so this run may replay entries from an older "
-            "extraction prompt (#1939).",
+            "extraction prompt.",
             RuntimeWarning,
             stacklevel=3,
         )
@@ -126,7 +126,7 @@ def _resolve_prompt_fp(prompt: "str | Path | None" = None,
 # A frontmatter delimiter is a whole line of exactly three dashes (optional
 # trailing whitespace). Substring checks like startswith("---") /
 # find("\n---") also match `----` thematic breaks and `--- text` prose,
-# silently dropping everything above them from the hash (#1259).
+# silently dropping everything above them from the hash.
 _FRONTMATTER_DELIM = re.compile(r"^---[ \t]*\r?$", re.MULTILINE)
 
 
@@ -152,12 +152,12 @@ def _body_content(content: bytes) -> bytes:
 # inside one mtime tick used to return the PREVIOUS content's digest; the
 # racily-clean guard below closes that hole (see _stat_sig_fresh).
 # `graphify extract --force` / `graphify update --force` (or KG_FORCE=1)
-# skip the cache reads and re-dispatch everything when needed (#1894).
+# skip the cache reads and re-dispatch everything when needed.
 _stat_index: dict[str, dict] = {}
 _stat_index_root: Path | None = None
-# Key anchor for the ON-DISK index (#2199): the first caller's key-root, i.e.
+# Key anchor for the ON-DISK index: the first caller's key-root, i.e.
 # the corpus. Distinct from _stat_index_root, which is the cache-FILE location
-# (cache_root, #1774) — the two differ under --out and must not be conflated.
+# (cache_root) — the two differ under --out and must not be conflated.
 _stat_index_anchor: Path | None = None
 _stat_index_dirty: bool = False
 
@@ -288,9 +288,9 @@ def _ensure_stat_index(root: Path, cache_root: "Path | None" = None) -> None:
     # _stat_index_root determines the cache FILE location, so honoring an
     # explicit cache_root keeps detect()'s word-count cache under the requested
     # --out dir instead of polluting the scanned corpus with a stray
-    # kg-out/ (#1747). _stat_index_anchor is the separate KEY anchor:
+    # kg-out/. _stat_index_anchor is the separate KEY anchor:
     # in-memory keys stay absolute, but the on-disk index stores in-anchor keys
-    # relative so a moved/cloned corpus still hits (#2199) — same load/save
+    # relative so a moved/cloned corpus still hits — same load/save
     # re-anchoring the detect manifest uses.
     _stat_index_root = Path(cache_root if cache_root is not None else root).resolve()
     _stat_index_anchor = Path(root).resolve()
@@ -320,7 +320,7 @@ def _flush_stat_index() -> None:
     if not _stat_index_dirty or _stat_index_root is None:
         return
     p = _stat_index_file(_stat_index_root)
-    # Build the on-disk form (#2199): prune entries whose file is gone (the
+    # Build the on-disk form: prune entries whose file is gone (the
     # index otherwise grows without bound), then store in-anchor keys as
     # forward-slash relative paths so the index survives a corpus move/clone.
     # Out-of-anchor keys stay absolute (same rule as the detect manifest); a
@@ -392,7 +392,7 @@ def file_hash(path: Path, root: Path = Path("."), cache_root: "Path | None" = No
     # The stat index is a cache artifact, so it must follow the cache location
     # (cache_root), not the key-anchor root — otherwise it leaves a stray
     # kg-out/cache/stat-index.json inside the analyzed source tree even when
-    # the AST cache itself is redirected to CWD (#1774 completion).
+    # the AST cache itself is redirected to CWD.
     _ensure_stat_index(root, cache_root=cache_root)
     resolved = p.resolve()
     abs_key = str(resolved)
@@ -401,7 +401,7 @@ def file_hash(path: Path, root: Path = Path("."), cache_root: "Path | None" = No
     # the same file hashed under two different roots yields two different digests
     # (this happens within one `--out` run), and a memo keyed only by absolute
     # path served whichever was computed first — making file_hash order-dependent
-    # and poisoning the persisted stat-index across runs (#1989). Store one digest
+    # and poisoning the persisted stat-index across runs. Store one digest
     # per salt so alternating roots don't force re-reads.
     try:
         salt = resolved.relative_to(Path(root).resolve()).as_posix().lower()
@@ -418,7 +418,7 @@ def file_hash(path: Path, root: Path = Path("."), cache_root: "Path | None" = No
                 if isinstance(cached, str):
                     return cached
             # Legacy single-digest entries ("hash") don't record which salt
-            # produced them, so they are never trusted (#1989) — recompute once.
+            # produced them, so they are never trusted — recompute once.
     except OSError:
         pass
 
@@ -452,7 +452,7 @@ def cached_word_count(path: Path, root: Path, compute, cache_root: "Path | None"
 
     ``detect()`` counts words in every PDF/docx/text file to size the corpus,
     which re-opens and re-parses every binary on each run — minutes on a large
-    docs corpus even when only a handful of files changed (#1656). This caches
+    docs corpus even when only a handful of files changed. This caches
     the count against the file's stat signature so an unchanged file is counted
     once and read from the index thereafter. ``compute(path)`` produces the
     count on a miss. A file that can't be stat'd (e.g. a Windows long path the
@@ -490,7 +490,7 @@ def _relativize_source_files_in(payload: dict, root: Path) -> None:
     forward-slash relative paths from ``root``.
 
     Mirror of :func:`graphify.watch._relativize_source_files` so cached
-    extraction fragments persist in portable form (#777). Out-of-root paths
+    extraction fragments persist in portable form. Out-of-root paths
     pass through unchanged.
 
     A CWD-relative field is re-anchored too. Extractors stamp ``source_file``
@@ -504,7 +504,7 @@ def _relativize_source_files_in(payload: dict, root: Path) -> None:
     ``Path(source_file).resolve()`` in ``prefix_remap`` — so a warm hit keeps
     the raw-path symbol ids a cold run canonicalizes: symbols stop sharing
     their file node's stem, and for absolute inputs the on-disk path survives
-    into the persisted id (#2630). Only rewritten when the CWD-relative
+    into the persisted id. Only rewritten when the CWD-relative
     reading is a real file and the root-relative reading is a different path,
     so a fragment that already stores root-relative (a semantic subagent's,
     see :func:`_normalize_source_file_value`) is left alone.
@@ -555,7 +555,7 @@ def _normalize_source_file_value(src: "str | Path", root_resolved: Path) -> str:
 
     Windows ``detect()`` emits absolute backslash paths, and a semantic
     fragment carrying one verbatim used to be persisted as-is — poisoning later
-    ``graphify update`` runs with a machine-specific ``source_file`` (#2197).
+    ``graphify update`` runs with a machine-specific ``source_file``.
     Out-of-root absolute paths pass through (slash-normalized only), same
     in/out rule and ``..``-rejection as :func:`_relativize_source_files_in`.
     """
@@ -573,7 +573,7 @@ def _normalize_source_file_value(src: "str | Path", root_resolved: Path) -> str:
 
 
 # Storage marker standing in for the absolute root a cached id/path was minted
-# under (#2257). Extractors mint node ids from the path STRING they are handed
+# under. Extractors mint node ids from the path STRING they are handed
 # (``_make_id(str(path))``, ``_file_node_id(path)``), so a cache entry written
 # under root A embeds A's slug in every id and edge endpoint. Those are only
 # rewritten to the canonical root-relative form by extract()'s whole-graph
@@ -585,7 +585,7 @@ def _normalize_source_file_value(src: "str | Path", root_resolved: Path) -> str:
 # portable by construction and reproduces exactly what a cold run under the
 # current root would have minted (the pre-remap form every downstream pass in
 # extract() expects). Same store-portable/re-anchor-on-load contract as
-# ``source_file`` (#777) and the stat index (#2199). Neither ``$`` nor ``-`` can
+# ``source_file`` and the stat index. Neither ``$`` nor ``-`` can
 # occur in a normalized id (``normalize_id`` drops every non-word character), and
 # no plausible source literal — a shell ``$root``, a template ``${root}`` — opens
 # with this exact token, so the marker cannot collide with extractor output.
@@ -619,7 +619,7 @@ def _id_anchor(path_str: str, rel_str: str) -> str:
 
 
 def _portability_anchors(path: "str | Path", root: "str | Path") -> tuple[list[str], str, list[str], str]:
-    """Root forms to strip from / restore into one cache entry (#2257).
+    """Root forms to strip from / restore into one cache entry.
 
     Returns ``(id_anchors, id_restore, path_anchors, path_restore)``. The two
     ``*_anchors`` lists are the forms a stored value may have been minted from,
@@ -631,7 +631,7 @@ def _portability_anchors(path: "str | Path", root: "str | Path") -> tuple[list[s
     cross-file edge targets minted from ANOTHER in-root file's absolute path
     (which share the scan root's spelling). They collapse to a single marker on
     write; that is safe because extract()'s remap registers both the input-form
-    and absolute-resolved-form ids for every path (#1529) and maps them to the
+    and absolute-resolved-form ids for every path and maps them to the
     same canonical id, so restoring either one canonicalizes identically.
     """
     from kglib.ids import normalize_id
@@ -717,7 +717,7 @@ def _relativize_ids_in(payload: dict, path: "str | Path", root: Path) -> None:
     root to reproduce a cold run's edges.
 
     Call AFTER :func:`_relativize_source_files_in`: that stores ``source_file``
-    as a bare relative path (the #777 format), and running this first would
+    as a bare relative path (the portable format), and running this first would
     leave it marker-prefixed instead, churning the on-disk format for nothing.
     """
     id_anchors, _, path_anchors, _ = _portability_anchors(path, root)
@@ -746,7 +746,7 @@ def _absolutize_ids_in(payload: dict, path: "str | Path", root: Path) -> None:
     The restored string is assembled by slicing, never by re-normalizing: the
     stored form (``$graphify-root$_pkg_mod_base``) is a storage encoding, not a valid id,
     and running it back through ``normalize_id`` would drop the marker's ``$``
-    and fuse it into the slug. Entries written before #2257 carry no marker and
+    and fuse it into the slug. Older entries carry no marker and
     pass through untouched — they are swept anyway, since AST entries live under
     a per-version directory (:func:`cache_dir`).
     """
@@ -801,15 +801,15 @@ def cache_dir(root: Path = Path("."), kind: str = "semantic",
     """Returns the cache directory for ``kind`` - creates it if needed.
 
     kind is "semantic", or a mode-namespaced semantic kind such as
-    "semantic-deep" (#1894). Upstream also had an "ast" kind (versioned by
+    "semantic-deep". Upstream also had an "ast" kind (versioned by
     package release); kg drops it — there is no AST pass.
 
     Semantic entries are NOT version-namespaced (re-extraction costs LLM
-    calls, #1252): they live in kg-out/cache/semantic/, with deep-mode
+    calls): they live in kg-out/cache/semantic/, with deep-mode
     entries beside them in kg-out/cache/semantic-deep/.
 
     ``prompt_fp`` (semantic kinds only) adds a p{fingerprint}/ subdirectory so
-    entries are attributed to the extraction prompt that produced them (#1939).
+    entries are attributed to the extraction prompt that produced them.
     Omitting it yields the historical flat layout, where entries of unknown
     vintage live.
     """
@@ -836,7 +836,7 @@ def load_cached(path: Path, root: Path = Path("."), kind: str = "semantic",
     ``root`` anchors the content-hash key and source_file relativization (it
     must stay the inferred common parent so keys remain portable). ``cache_root``
     decouples *where* the cache directory lives from that anchor — the cache is
-    an output and must not land inside a read-only/analyzed source tree (#1774).
+    an output and must not land inside a read-only/analyzed source tree.
     When ``cache_root`` is None the location falls back to ``root`` (unchanged
     behavior for existing callers).
 
@@ -848,7 +848,7 @@ def load_cached(path: Path, root: Path = Path("."), kind: str = "semantic",
     ``prompt`` (semantic kinds) is the extraction prompt — text, or a Path to
     the prompt file — that the caller is about to extract with. It selects the
     p{fingerprint}/ namespace, so an entry produced by a different prompt is a
-    miss rather than a silent stale hit (#1939). When it is given and the
+    miss rather than a silent stale hit. When it is given and the
     fingerprinted namespace misses, ``allow_legacy`` (default True) falls back
     to a flat-layout entry: those predate fingerprinting, so their vintage is
     unknowable — they are served rather than re-billed, and the hit is counted
@@ -877,7 +877,7 @@ def load_cached(path: Path, root: Path = Path("."), kind: str = "semantic",
             # Corrupt entry, not a miss: a truncated write or a bad producer
             # (e.g. unescaped Windows backslashes in source_file) leaves JSON
             # that fails to parse on every future run, so the file is silently
-            # re-extracted forever. Count it so the run can report it (#2405).
+            # re-extracted forever. Count it so the run can report it.
             _corrupt_cache_entries += 1
             return None
         except OSError:
@@ -896,12 +896,12 @@ def load_cached(path: Path, root: Path = Path("."), kind: str = "semantic",
         if legacy_hit:
             _legacy_semantic_hits += 1
         # Re-anchor relative source_file fields so callers see the same
-        # absolute-path shape that a fresh in-process extraction produces
-        # (#777). Legacy entries with absolute source_file pass through.
+        # absolute-path shape that a fresh in-process extraction produces.
+        # Legacy entries with absolute source_file pass through.
         if isinstance(result, dict):
             _absolutize_source_files_in(result, root)
-            # Same contract for the ids and remaining paths the entry embeds
-            # (#2257): without this a warm hit under a different absolute root
+            # Same contract for the ids and remaining paths the entry embeds:
+            # without this a warm hit under a different absolute root
             # replays ids minted from the ORIGINAL root, which extract()'s
             # id-remap cannot fix because they match none of its current-path
             # keys. Order is free — source_file never carries the marker.
@@ -920,12 +920,12 @@ def save_cached(path: Path, result: dict, root: Path = Path("."), kind: str = "s
 
     ``root`` anchors the content-hash key and source_file relativization;
     ``cache_root`` (when given) is where the cache directory is written, decoupled
-    from ``root`` so the cache never lands inside the analyzed source tree (#1774).
+    from ``root`` so the cache never lands inside the analyzed source tree.
 
     ``prompt`` (semantic kinds) is the extraction prompt that produced ``result``
     — text, or a Path to the prompt file. It stamps the entry into the
     p{fingerprint}/ namespace so a later run under a different prompt does not
-    replay it (#1939). Writes always land in the fingerprinted namespace when a
+    replay it. Writes always land in the fingerprinted namespace when a
     prompt is given: an entry of known vintage is never written back into the
     flat unknown-vintage layout.
 
@@ -938,7 +938,7 @@ def save_cached(path: Path, result: dict, root: Path = Path("."), kind: str = "s
         return
     # Relativize source_file fields against ``root`` before write so the
     # cache file on disk is portable across machines and checkout
-    # directories (#777). The cache key is content-hashed so lookup is
+    # directories. The cache key is content-hashed so lookup is
     # already path-independent; this fixes the embedded path leak.
     #
     # Serialize a relativized copy rather than mutating the caller's dict —
@@ -958,7 +958,7 @@ def save_cached(path: Path, result: dict, root: Path = Path("."), kind: str = "s
         on_disk = _copy.deepcopy(result)
         _relativize_source_files_in(on_disk, root)
         # Then replace the absolute root inside the ids and remaining paths, so
-        # the entry replays portably under any root (#2257). Strictly after the
+        # the entry replays portably under any root. Strictly after the
         # source_file pass, which owns that field's bare-relative format.
         _relativize_ids_in(on_disk, p, root)
     h = file_hash(p, root, cache_root=cache_root)
@@ -1007,21 +1007,21 @@ def check_semantic_cache(
     existing callers that omit it (including older installed skill flows)
     are unaffected. A non-None mode (e.g. ``"deep"``) reads
     ``cache/semantic-{mode}/`` instead, so deep-mode results never shadow
-    (or get shadowed by) standard-mode entries for the same content (#1894).
+    (or get shadowed by) standard-mode entries for the same content.
 
     ``prompt`` is the extraction prompt this run will use for the uncached
     files — the prompt text (Python path) or a Path to the prompt file the
     agent loaded (skill path, ``references/extraction-spec.md``). Supplying it
     restricts hits to entries produced by that same prompt, so an upgrade that
-    changed the prompt re-extracts instead of replaying the older vintage
-    (#1939). Entries written before fingerprinting existed still hit — their
+    changed the prompt re-extracts instead of replaying the older vintage.
+    Entries written before fingerprinting existed still hit — their
     vintage is unknowable and dropping them would re-bill a whole corpus — but
     a warning reports how many were served. Omitting ``prompt`` keeps the
     historical behavior for existing callers.
 
     ``cache_root`` decouples *where* the cache is read from the key-anchor
-    ``root``, mirroring :func:`load_cached` and :func:`save_semantic_cache`
-    (#1774 / #1990). With ``--out``, pass the corpus as ``root`` (so content-hash
+    ``root``, mirroring :func:`load_cached` and :func:`save_semantic_cache`.
+    With ``--out``, pass the corpus as ``root`` (so content-hash
     keys and relative-path resolution stay anchored to the source tree) and the
     output directory as ``cache_root``. Omitting it keeps ``root`` for both.
     """
@@ -1054,7 +1054,7 @@ def check_semantic_cache(
             "extraction-prompt fingerprinting and were written by an unknown prompt "
             "version; they were replayed as-is, so this graph may mix extraction "
             "vintages. Re-run with --force (or KG_FORCE=1) to re-extract them "
-            "with the current prompt (#1939).",
+            "with the current prompt.",
             RuntimeWarning,
             stacklevel=2,
         )
@@ -1066,7 +1066,7 @@ def check_semantic_cache(
             "not be parsed as JSON and were treated as misses, so those files were "
             "re-extracted. A corrupt entry stays on disk and fails again every run; "
             "run with --force (or KG_FORCE=1) to rewrite them, or clear the "
-            "cache to stop paying for the re-extraction (#2405).",
+            "cache to stop paying for the re-extraction.",
             RuntimeWarning,
             stacklevel=2,
         )
@@ -1108,14 +1108,14 @@ def save_semantic_cache(
 
     Groups nodes and edges by source_file, then saves one cache entry per file
     under cache/semantic/ (separate from AST entries in cache/ast/) to prevent
-    hash-key collisions (#582).
+    hash-key collisions.
 
     ``mode`` selects the cache namespace, mirroring
     :func:`check_semantic_cache`: ``None`` (the default) writes
     ``cache/semantic/`` — byte-identical to the historical behavior for
     existing callers that omit it — while a non-None mode (e.g. ``"deep"``)
     writes ``cache/semantic-{mode}/`` so richer deep-mode results never
-    overwrite standard-mode entries and vice versa (#1894).
+    overwrite standard-mode entries and vice versa.
 
     When ``merge_existing`` is True, any already-cached entry for a file is
     unioned with the new results before saving instead of being overwritten.
@@ -1125,7 +1125,7 @@ def save_semantic_cache(
     When ``allowed_source_files`` is provided, only those files may be used as
     cache-write keys. Semantic nodes can legitimately mention another corpus
     file, but a model must not be able to replace that file's complete cache
-    entry unless the file was part of the current extraction batch (#1757).
+    entry unless the file was part of the current extraction batch.
 
     When ``partial_source_files`` is provided, entries for those files are
     stamped ``partial: True`` — the extraction was truncated, so the entry is
@@ -1137,18 +1137,17 @@ def save_semantic_cache(
     ``prompt`` is the extraction prompt that produced these results — text, or
     a Path to the prompt file. It stamps entries into the p{fingerprint}/
     namespace so a later run under a different prompt re-extracts rather than
-    replaying them (#1939). Pass the same prompt here as to
+    replaying them. Pass the same prompt here as to
     :func:`check_semantic_cache`, or the write lands in a namespace the next
     read won't consult.
 
     ``cache_root`` decouples *where* the cache directory is written from the
     source-key anchor ``root`` — mirroring the same split that :func:`load_cached`
-    and :func:`save_cached` already expose (#1774). When given, cache files land
+    and :func:`save_cached` already expose. When given, cache files land
     under ``cache_root`` while ``source_file`` paths are still resolved and
     relativized against ``root``. When omitted, ``root`` is used for both
     purposes (unchanged behaviour for existing callers). This fixes checkpoints
-    and the final save going to the corpus tree instead of ``--out`` (#1990,
-    #1991).
+    and the final save going to the corpus tree instead of ``--out``.
 
     Returns the number of files cached.
     """
@@ -1158,7 +1157,7 @@ def save_semantic_cache(
     root_path = Path(root).resolve()
 
     def _normalized(item: dict) -> dict:
-        """Copy of ``item`` with a portable ``source_file`` (#2197).
+        """Copy of ``item`` with a portable ``source_file``.
 
         Normalizing BEFORE grouping means both the group key and the persisted
         item carry the relative forward-slash form, so a fragment whose
@@ -1212,7 +1211,7 @@ def save_semantic_cache(
         partial_paths = {resolved_source_path(path) for path in partial_source_files}
         # A chunk that truncated to an EMPTY parse contributes no grouped items,
         # so its file is absent from by_file and the write loop below would never
-        # stamp it partial — leaving a prior clean slice looking complete (#1950
+        # stamp it partial — leaving a prior clean slice looking complete (the
         # empty-parse gap). Seed an empty group for each named partial file that
         # isn't already present, so the loop merges its existing entry and stamps
         # it partial. Keyed by the resolved path (deduped against present groups).
@@ -1226,15 +1225,15 @@ def save_semantic_cache(
         p = resolved_source_path(fpath)
         return not p.is_file() or (allowed_paths is not None and p not in allowed_paths)
 
-    # Dangling-reference pruning (#1916). A node group is skipped by the write
+    # Dangling-reference pruning. A node group is skipped by the write
     # loop below when its source_file is not a real file (ghost path) or is
-    # out-of-scope per the #1757 guard — but an edge/hyperedge in an ALLOWED
+    # out-of-scope per the scope guard — but an edge/hyperedge in an ALLOWED
     # group that references a node id from a skipped group used to be written
     # verbatim, so on replay (check_semantic_cache) it dangled forever (the
-    # #1895 merged-result filter runs AFTER this checkpoint write and is
+    # merged-result filter runs AFTER this checkpoint write and is
     # bypassed entirely on replay). Compute the node ids that will be skipped
     # and drop any to-be-written edge whose endpoint — or hyperedge whose
-    # member (whole-hyperedge drop, mirroring #1895) — references one. Gated
+    # member (whole-hyperedge drop, mirroring that filter) — references one. Gated
     # on allowed_source_files so unscoped callers stay byte-identical.
     if allowed_paths is not None:
         skipped_ids: set = set()
@@ -1294,7 +1293,7 @@ def save_semantic_cache(
                 # allow_legacy=False: merging a pre-fingerprint entry into this
                 # write would fuse two prompt vintages inside a single entry and
                 # then stamp the result as current-vintage — the exact mixing
-                # #1939 is about, made unfixable because the entry now claims a
+                # described above, made unfixable because the entry now claims a
                 # prompt that only produced half of it.
                 # allow_partial=True: a file split into slices across chunks
                 # accumulates here; if an earlier slice truncated, keep its nodes
@@ -1318,8 +1317,8 @@ def save_semantic_cache(
             # carries the intrinsic ``_partial`` marker, OR the entry it merged
             # onto was already partial (an empty-parse truncation leaves a
             # ``partial: True`` entry with no item markers, so a later clean slice
-            # merging over it must NOT silently promote the half-file to complete
-            # — #1950). Copy so the caller's dict is never mutated. A genuine
+            # merging over it must NOT silently promote the half-file to complete).
+            # Copy so the caller's dict is never mutated. A genuine
             # complete re-extraction (merge_existing=False) overwrites the
             # content-hash key with a non-partial entry that then serves normally.
             is_partial = (
@@ -1340,7 +1339,7 @@ def save_semantic_cache(
             "skipped because their paths do not resolve to real files. This usually "
             "means ``root`` is anchored to the wrong directory (e.g. the --out "
             "directory instead of the corpus root). Pass the corpus directory as "
-            "``root`` and the output directory as ``cache_root`` (#1991).",
+            "``root`` and the output directory as ``cache_root``.",
             RuntimeWarning,
             stacklevel=2,
         )

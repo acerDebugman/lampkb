@@ -1,10 +1,10 @@
 # Ported from graphify/tests/test_build.py — the generic build_from_json /
 # build / edge-data cases. graphify -> kglib.
 #
-# Dropped as code/AST-only: ghost-merge AST-twin cases (#1145/#2068 with
+# Dropped as code/AST-only: ghost-merge AST-twin cases (with
 # _origin="ast" code nodes), old-stem alias cases (C/C++ include fallback),
-# cross-language phantom-edge guards (#1749), the two-tier AST/semantic
-# build_merge layer tests, MCP node-id tests (#2408), and
+# cross-language phantom-edge guards, the two-tier AST/semantic
+# build_merge layer tests, MCP node-id tests, and
 # test_build_merge_preserves_call_edge_direction (imports the JS extractor).
 # The count/attr cases run against tests/fixtures/extraction_docs.json (the
 # upstream fixtures/extraction.json is code-flavored; counts adapted).
@@ -27,7 +27,7 @@ def load_extraction():
     return json.loads((FIXTURES / "extraction_docs.json").read_text())
 
 
-# --- dedupe helpers (#1317) --------------------------------------------------
+# --- dedupe helpers ----------------------------------------------------------
 
 def test_dedupe_edges_collapses_exact_parallels():
     edges = [
@@ -55,8 +55,8 @@ def test_dedupe_edges_is_idempotent():
 
 
 def test_dedupe_nodes_collapses_by_id_last_wins():
-    # #1327: a shared anchor is emitted once per importing file; the raw writer
-    # must collapse same-id node dicts (#1317).
+    # A shared anchor is emitted once per importing file; the raw writer
+    # must collapse same-id node dicts.
     nodes = [
         {"id": "guide", "label": "Guide", "type": "module", "source_file": "A.md"},
         {"id": "intro", "label": "Intro", "file_type": "document"},
@@ -98,10 +98,10 @@ def test_ambiguous_edge_preserved():
     assert data["confidence"] == "AMBIGUOUS"
 
 
-# --- edge weight normalization (#1960) ---------------------------------------
+# --- edge weight normalization -----------------------------------------------
 
 def test_null_weight_edge_builds_and_clusters(tmp_path):
-    """#1960: an explicit ``"weight": null`` (JSON null -> None) used to survive
+    """An explicit ``"weight": null`` (JSON null -> None) used to survive
     ``.get("weight", 1.0)`` and crash Louvain/Leiden modularity with a TypeError.
     It must now coerce to the 1.0 default, build, and cluster without raising."""
     from kglib.cluster import cluster
@@ -142,7 +142,7 @@ def test_malformed_weights_normalize():
     assert G["n2"]["n3"]["weight"] == 1.0     # negative -> default
 
 
-# --- legacy schema canonicalization (#2194) -----------------------------------
+# --- legacy schema canonicalization -------------------------------------------
 
 def test_legacy_node_source_canonicalized():
     """Legacy 'source' key on nodes is renamed to 'source_file' before graph build."""
@@ -166,7 +166,7 @@ def test_legacy_edge_from_to_canonicalized():
 
 
 def test_legacy_node_name_path_aliases_folded():
-    """#2194: nodes carrying `name`/`path` instead of `label`/`source_file` must
+    """Nodes carrying `name`/`path` instead of `label`/`source_file` must
     be canonicalized before validation, not enter the graph as label-less
     ghosts. After build the canonicalized dict also passes validation."""
     from kglib.validate import validate_extraction
@@ -184,7 +184,7 @@ def test_legacy_node_name_path_aliases_folded():
 
 
 def test_legacy_edge_type_confidence_score_aliases_folded():
-    """#2194: edges carrying `type`/`confidence_score` instead of
+    """Edges carrying `type`/`confidence_score` instead of
     `relation`/`confidence` fold to canonical fields. Recovery confidence is
     INFERRED (never EXTRACTED — alias recovery is not provenance) and the
     companion confidence_score float is retained, not popped."""
@@ -202,7 +202,7 @@ def test_legacy_edge_type_confidence_score_aliases_folded():
 
 
 def test_node_alias_canonical_field_wins():
-    """#2194: when both the canonical field and its alias are present, the
+    """When both the canonical field and its alias are present, the
     canonical value wins and the alias key is left untouched."""
     ext = {"nodes": [{"id": "n1", "label": "Real", "name": "Alias",
                       "file_type": "document", "source_file": "a.md"}],
@@ -213,7 +213,7 @@ def test_node_alias_canonical_field_wins():
 
 
 def test_alias_node_gets_nonempty_norm_label(tmp_path):
-    """#2194: a recovered alias node must serialize with a non-empty norm_label
+    """A recovered alias node must serialize with a non-empty norm_label
     so query/explain can find it."""
     from kglib.export import to_json
     ext = {"nodes": [{"id": "n1", "name": "Foo", "path": "a/b.md", "file_type": "concept"}],
@@ -227,7 +227,7 @@ def test_alias_node_gets_nonempty_norm_label(tmp_path):
 
 
 def test_extraction_warning_breakdown_by_cause(capsys):
-    """#2194: a mixed batch of schema errors must report per-cause counts, not
+    """A mixed batch of schema errors must report per-cause counts, not
     just the first error."""
     ext = {"nodes": [
         {"id": "n1", "label": "A", "file_type": "document", "source_file": "a.md"},
@@ -247,10 +247,10 @@ def test_extraction_warning_breakdown_by_cause(capsys):
     assert "3x missing required field 'relation'" in err
 
 
-# --- semantic id re-key (#2197 / #1504) ----------------------------------------
+# --- semantic id re-key --------------------------------------------------------
 
 def test_absolute_derived_semantic_ids_rekeyed(tmp_path):
-    """#2197: a semantic fragment whose ids were derived from an ABSOLUTE
+    """A semantic fragment whose ids were derived from an ABSOLUTE
     source_file (Windows detect() emits them) must re-key to the canonical
     repo-relative stem instead of ghosting against the existing graph."""
     from kglib.ids import make_id
@@ -275,7 +275,7 @@ def test_absolute_derived_semantic_ids_rekeyed(tmp_path):
 
 
 def test_absolute_derived_semantic_ids_rekeyed_backslash(tmp_path):
-    """#2197 (separator variant): the same absolute-derived-id fragment with
+    """Separator variant: the same absolute-derived-id fragment with
     backslash separators in source_file re-keys identically."""
     from kglib.ids import make_id
     (tmp_path / "docs").mkdir()
@@ -319,7 +319,7 @@ def test_source_file_backslash_normalized():
 
 
 def test_edge_missing_source_file_backfilled_from_node():
-    """#1279: a semantic/LLM edge lacking source_file must inherit it from its
+    """A semantic/LLM edge lacking source_file must inherit it from its
     source node rather than reach graph.json with no file reference."""
     extraction = {
         "nodes": [
@@ -349,7 +349,7 @@ def test_build_merges_multiple_extractions():
 
 def test_build_from_json_relativizes_absolute_source_file(tmp_path):
     """Semantic subagents emit absolute source_file paths; build_from_json must
-    relativize them to root so query traversal works correctly (#932)."""
+    relativize them to root so query traversal works correctly."""
     root = tmp_path / "myproject"
     root.mkdir()
     abs_path = str(root / "docs" / "overview.md")
@@ -364,7 +364,7 @@ def test_build_from_json_relativizes_absolute_source_file(tmp_path):
         ],
     }
     G = build_from_json(extraction, root=root)
-    # The id-stem migration (#1504) re-keys the old short id to the full-path form.
+    # The id-stem migration re-keys the old short id to the full-path form.
     sf = G.nodes["docs_overview_intro"]["source_file"]
     assert not sf.startswith("/"), f"source_file still absolute: {sf}"
     assert sf == "docs/overview.md"
@@ -377,15 +377,15 @@ def test_build_from_json_relative_source_file_unchanged(tmp_path):
         "edges": [],
     }
     G = build_from_json(extraction, root=tmp_path)
-    # source_file must be untouched; the id is re-keyed to the full-path form (#1504).
+    # source_file must be untouched; the id is re-keyed to the full-path form.
     assert G.nodes["src_foo_bar"]["source_file"] == "src/foo.md"
 
 
-# --- file_type canonicalization (#660 / #840) -----------------------------------
+# --- file_type canonicalization -------------------------------------------------
 
 def test_none_file_type_defaults_to_concept(capsys):
     """Legacy nodes with file_type=None must not trigger 'invalid file_type None'
-    warnings (#660)."""
+    warnings."""
     ext = {
         "nodes": [
             {"id": "n1", "label": "Stub", "file_type": None, "source_file": "a.md"},
@@ -421,7 +421,7 @@ def test_missing_file_type_defaults_to_concept(capsys):
 
 def test_real_invalid_file_type_coerced_to_concept():
     """Unknown file_type values are coerced through the synonym mapper, falling
-    back to 'concept' for anything that isn't a known LLM synonym (#840)."""
+    back to 'concept' for anything that isn't a known LLM synonym."""
     ext = {
         "nodes": [
             {"id": "n1", "label": "Bad", "file_type": "weird_type", "source_file": "a.md"},
@@ -455,7 +455,7 @@ def test_file_type_synonym_mapping():
 # --- ghost merge, semantic-tier cases (docs-relevant: same-file LLM duplicates) ---
 
 def test_ghost_merge_not_across_directories_same_basename():
-    """#2068: two unrelated non-AST nodes with the same basename+label in
+    """Two unrelated non-AST nodes with the same basename+label in
     DIFFERENT directories must NOT be merged onto one survivor (the bug: bare
     basename collapsed docs/product_a/index.md and docs/product_b/index.md)."""
     ext = {
@@ -479,7 +479,7 @@ def test_ghost_merge_not_across_directories_same_basename():
 
 
 def test_ghost_merge_non_ast_different_files_both_survive():
-    """#1753: two NON-AST (semantic) nodes sharing (basename, label) but from
+    """Two NON-AST (semantic) nodes sharing (basename, label) but from
     DIFFERENT files are distinct concepts with no canonical twin. They must
     not be merged into an arbitrary survivor; both survive."""
     ext = {
@@ -498,7 +498,7 @@ def test_ghost_merge_non_ast_different_files_both_survive():
 def test_ghost_merge_non_ast_same_file_still_merges():
     """A genuine duplicate — two non-AST nodes with the SAME source_file and
     label — is a real ghost and still collapses to one node (deterministically),
-    so #1753's fix doesn't leave same-file LLM duplicates behind."""
+    so the ghost-merge fix doesn't leave same-file LLM duplicates behind."""
     ext = {
         "nodes": [
             {"id": "a_foo", "label": "Foo", "file_type": "concept",
@@ -512,11 +512,11 @@ def test_ghost_merge_non_ast_same_file_still_merges():
     assert G.number_of_nodes() == 1
 
 
-# --- build_merge directed-flag inheritance (#2342) ------------------------------
+# --- build_merge directed-flag inheritance -------------------------------------
 
 def test_build_merge_inherits_directed_flag_from_disk(tmp_path):
     """build_merge with no explicit `directed=` must honor the on-disk graph's
-    own `directed` flag instead of silently defaulting to False (#2342)."""
+    own `directed` flag instead of silently defaulting to False."""
     ext = {
         "nodes": [{"id": "a", "label": "a", "file_type": "concept",
                    "source_file": "x.md", "source_location": "L1"}],
@@ -550,7 +550,7 @@ def test_build_merge_fresh_graph_defaults_undirected(tmp_path):
 
 def test_build_merge_explicit_directed_overrides_disk_flag(tmp_path):
     """An explicit directed=True/False from the caller must still win over
-    whatever is stored on disk (#2342)."""
+    whatever is stored on disk."""
     ext = {
         "nodes": [{"id": "a", "label": "a", "file_type": "concept",
                    "source_file": "x.md", "source_location": "L1"}],
@@ -574,7 +574,7 @@ def test_build_merge_explicit_directed_overrides_disk_flag(tmp_path):
 
 
 def test_build_from_json_preserves_first_direction_on_bidirectional_pair(tmp_path):
-    """Regression for #1061: two edges between the same pair in opposite
+    """Regression: two edges between the same pair in opposite
     directions collapse to one undirected edge; the surviving edge must keep
     the FIRST-seen direction, not the lexicographically-later one."""
     from kglib.export import to_json
@@ -609,7 +609,7 @@ def test_build_from_json_preserves_first_direction_on_bidirectional_pair(tmp_pat
     assert saved_cites[0]["target"] == "z_emitter"
 
 
-# --- edge_data / edge_datas (#796) ----------------------------------------------
+# --- edge_data / edge_datas -----------------------------------------------------
 
 def test_edge_data_simple_graph():
     G = nx.Graph()
@@ -727,10 +727,10 @@ def test_build_from_json_skips_edge_with_non_hashable_endpoint():
     assert G.has_edge("a", "b")
 
 
-# --- legacy-id detection (#1504) ----------------------------------------------------
+# --- legacy-id detection --------------------------------------------------------
 
 def test_graph_has_legacy_ids_detects_old_scheme():
-    """The read-only-consumer nudge (query/serve) flags a pre-#1504 graph and
+    """The read-only-consumer nudge (query/serve) flags a legacy graph and
     leaves a canonical one alone."""
     from kglib.build import graph_has_legacy_ids
     old = [{"id": "api_readme", "source_file": "docs/v1/api/README.md", "type": "document", "source_location": "L1"}]
@@ -742,10 +742,10 @@ def test_graph_has_legacy_ids_detects_old_scheme():
     assert graph_has_legacy_ids([{"id": "x", "label": "y"}], root=".") is False
 
 
-# --- doc-twin merge (#1799, documents-specific) -------------------------------------
+# --- doc-twin merge (documents-specific) -----------------------------------------
 
 def test_markdown_doc_twin_merges_into_semantic_doc_node():
-    """#1799: a markdown quick-scan's bare `<slug>` doc node and the semantic
+    """A markdown quick-scan's bare `<slug>` doc node and the semantic
     `<slug>_doc` node for the same file must collapse to one node, with edges
     consolidated — otherwise a document is two disconnected halves."""
     ext = {
@@ -774,7 +774,7 @@ def test_markdown_doc_twin_merges_into_semantic_doc_node():
 
 
 def test_doc_twin_merge_does_not_touch_non_document_nodes():
-    """#1799 guard: a concept `foo` and an unrelated `foo_doc` (not
+    """Doc-twin guard: a concept `foo` and an unrelated `foo_doc` (not
     file_type=document) must NOT merge, even sharing a source_file."""
     ext = {
         "nodes": [
@@ -789,10 +789,10 @@ def test_doc_twin_merge_does_not_touch_non_document_nodes():
     assert {"m_foo", "m_foo_doc"} <= set(G.nodes())
 
 
-# --- hyperedge member revalidation (#1916) -------------------------------------------
+# --- hyperedge member revalidation ------------------------------------------------
 
 def test_build_from_json_prunes_dangling_hyperedge_members(capsys):
-    """#1916: members absent from the built node set are pruned — matching how
+    """Members absent from the built node set are pruned — matching how
     dangling pairwise edges are skipped — and a hyperedge with no surviving
     member is dropped whole."""
     ext = {
@@ -813,7 +813,7 @@ def test_build_from_json_prunes_dangling_hyperedge_members(capsys):
     assert "he_all_ghost" in capsys.readouterr().err
 
 
-# --- foreign-absolute source_file portability (#2618) --------------------------------
+# --- foreign-absolute source_file portability -------------------------------------
 
 FOREIGN_ABSOLUTE_SOURCE_FILES = [
     "/home/ci/build/repo/docs/api/README.md",   # POSIX-absolute (Linux/Docker build)
@@ -823,7 +823,7 @@ FOREIGN_ABSOLUTE_SOURCE_FILES = [
 
 @pytest.mark.parametrize("sf", FOREIGN_ABSOLUTE_SOURCE_FILES)
 def test_semantic_rekey_skips_absolute_from_either_platform(sf):
-    """#2618: an absolute source_file is left alone whichever OS wrote it."""
+    """An absolute source_file is left alone whichever OS wrote it."""
     from kglib.build import _semantic_id_remap
     nodes = [{"id": "api_readme", "source_file": sf, "type": "document"}]
     assert _semantic_id_remap(nodes, None) == {}, (
@@ -853,7 +853,7 @@ def test_norm_source_file_relativizes_a_posix_absolute_path():
 def test_derive_prune_root_recovers_root_from_posix_absolute_prune_sources():
     """The prune-root recovery skips any prune source it thinks is relative;
     with a host-only absoluteness test, POSIX-absolute prune sources were
-    skipped on Windows and prune silently no-opped (#1151 / #2446 / #2012)."""
+    skipped on Windows and prune silently no-opped."""
     from kglib.build import _derive_prune_root
     stored = {"docs/a.md", "/home/ci/build/repo/docs/b.md"}
     assert _derive_prune_root(

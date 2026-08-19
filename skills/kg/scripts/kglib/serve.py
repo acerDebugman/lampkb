@@ -69,7 +69,7 @@ def _is_searchable(term: str) -> bool:
 # `work` stays findable via explain/path. `work`/`works`/`working` are included
 # because "how does X work" / "how X works" is the most common question phrasing.
 #
-# Non-English question words are just as damaging (#1900): in a mostly-English
+# Non-English question words are just as damaging: in a mostly-English
 # code corpus, German "wie"/"funktioniert" are rare, so they get HIGH IDF weight
 # and out-seed the actual content noun by orders of magnitude. So this also
 # carries a curated German set plus a trimmed French/Spanish/Portuguese/Italian
@@ -190,7 +190,7 @@ def _node_search_text(data: dict, nid: str) -> str:
     - a trailing diacritic-folded `nid` feeds _find_node's `norm_query == nid_norm`
       tier. Every query path folds through `_strip_diacritics` (NFKD), so a raw-only
       id field leaves the needle and the posting under different normal forms and
-      the node is dropped before any predicate runs (#2467). Hangul is the common
+      the node is dropped before any predicate runs. Hangul is the common
       case: NFKD decomposes a syllable into conjoining jamo, which have combining
       class 0 and therefore survive the combining-character filter. The field is
       appended only when the fold actually differs, so the text an all-ASCII graph
@@ -347,7 +347,7 @@ def _score_query(
     scored: list[tuple[float, str]] = []
     # Dedupe tokens, order-preserving (as _pick_seeds already does): a repeated
     # query word must not double-count every tier, and with coverage scaling
-    # below it would also inflate the matched-term ratio (#1602).
+    # below it would also inflate the matched-term ratio.
     norm_terms = list(dict.fromkeys(tok for t in terms for tok in _search_tokens(t)))
     n_terms = len(norm_terms)
     idf = _compute_idf(G, norm_terms)
@@ -406,7 +406,7 @@ def _score_query(
                 or label_tokens.startswith(joined)
             ):
                 score += _PREFIX_MATCH_BONUS * 10 * joined_w
-        # Term coverage (#1602): scale the per-term exact/prefix tiers by the
+        # Term coverage: scale the per-term exact/prefix tiers by the
         # squared fraction of query terms the node's LABEL matches, so a lone
         # generic word that happens to equal a short label (query term "home"
         # vs. a home() leaf) cannot bury nodes that match several of the
@@ -532,16 +532,16 @@ def _pick_seeds(
     terms by ~1000x (see `_EXACT_MATCH_BONUS` vs. `_SUBSTRING_MATCH_BONUS`).
     The 20%-gap cutoff then silently discards all of those substring-tier
     seeds, so the BFS traversal only ever explores the neighborhood of the one
-    unrelated exact match — see #1445.
+    unrelated exact match.
 
     When `G` and `best_seed_by_term` are supplied, this guarantees at least one
     seed per distinct query term that has any match at all, so one term's
     incidental collision cannot starve out the others. The per-token winners
     in `best_seed_by_term` are precomputed by `_score_query` (during the same
     traversal that produced `scored`) so this function no longer rescores the
-    graph per term — see #1445 and the `_score_query` docstring.
+    graph per term — see the `_score_query` docstring.
 
-    Coverage scaling in _score_nodes (#1602) now dampens a lone collision's
+    Coverage scaling in _score_nodes now dampens a lone collision's
     exact tier on multi-term queries, which brings label-matching relevant
     nodes back inside the gap window; this per-term guarantee remains
     load-bearing for relevant nodes matched only via substrings, whose flat
@@ -553,8 +553,8 @@ def _pick_seeds(
     # Deduplicate seeds by (normalized) label so a generic, homonymous symbol —
     # e.g. dozens of route handlers all labelled `GET`/`POST`, or a `handler`
     # repeated across a framework — contributes at most one seed instead of
-    # consuming every slot and flooding the BFS with near-identical neighborhoods
-    # (#1766). The key mirrors _score_nodes' normalization so `GET`/`Get`/`get`
+    # consuming every slot and flooding the BFS with near-identical neighborhoods.
+    # The key mirrors _score_nodes' normalization so `GET`/`Get`/`get`
     # collapse together. When G is absent we can't read labels, so fall back to
     # the (unique) node id, which is a no-op — preserving the old behavior.
     def _seed_label_key(nid: str) -> str:
@@ -581,15 +581,14 @@ def _pick_seeds(
     if G is not None and best_seed_by_term:
         # Guarantee one seed per distinct query term that has any match at all,
         # so an incidental exact match on one term cannot starve matches on
-        # other terms (#1445). Iterate tokens in a deterministic sorted order
+        # other terms. Iterate tokens in a deterministic sorted order
         # so seeds added by this loop have a stable order independent of dict
         # iteration — preserving the legacy `_pick_seeds(terms=...)` behavior
         # which iterated `sorted({tok ...})`. Per-token winners arrive
         # precomputed in `best_seed_by_term` from `_score_query`'s single
         # traversal, so `_pick_seeds` no longer rescoring the graph per term.
         # The per-label dedup cap also gates these additions, so the guarantee
-        # cannot reintroduce a second copy of an already-seeded generic label
-        # (#1766).
+        # cannot reintroduce a second copy of an already-seeded generic label.
         for term in sorted(best_seed_by_term):
             best_nid = best_seed_by_term[term]
             # Honor the same per-label cap so the per-term guarantee can't
@@ -603,10 +602,9 @@ def _pick_seeds(
 
 # Verb-shaped tokens that express the RELATION a query asks about ("who calls
 # X", "what uses Y") rather than a symbol to look up. `_query_terms` keeps them
-# on purpose (a corpus can legitimately define an identifier named `calls`, see
-# #1597), but they must not be handed a guaranteed seed slot in `_pick_seeds`:
+# on purpose (a corpus can legitimately define an identifier named `calls`), but they must not be handed a guaranteed seed slot in `_pick_seeds`:
 # an incidental prefix match (e.g. "calls" prefixing `.callStoreWithAmount()`)
-# would otherwise seat an unrelated decoy as a BFS root (#2507). Demotion
+# would otherwise seat an unrelated decoy as a BFS root. Demotion
 # happens at the `_query_graph_text` call site, so `_score_query`'s ranking —
 # where such a verb can still win a seat on merit via the gap window — is
 # untouched. Deliberately verbs only; relation NOUNS (module, field, return)
@@ -728,7 +726,7 @@ def _filter_graph_by_context(G: nx.Graph, context_filters: list[str] | None) -> 
 
 
 def _complete_induced_edges(G: nx.Graph, visited: set[str], edges_seen: list[tuple]) -> None:
-    """Append edges between visited nodes that the traversal never recorded (#2323).
+    """Append edges between visited nodes that the traversal never recorded.
 
     Both traversals only record an edge that *discovers* an unvisited neighbour,
     so what they return is a traversal tree, not the induced subgraph over the
@@ -766,7 +764,7 @@ def _complete_induced_edges(G: nx.Graph, visited: set[str], edges_seen: list[tup
 
     seen = {_key(u, v) for u, v in edges_seen}
     # sorted() so the appended order can't shift run-to-run with CPython's
-    # per-process string-hash seed, the same reason the renderer sorts (#1753).
+    # per-process string-hash seed, the same reason the renderer sorts.
     for u, v in G.edges(sorted(visited)):
         if u == v or v not in visited:
             continue
@@ -913,7 +911,7 @@ def _subgraph_to_text(G: nx.Graph, nodes: set[str], edges: list[tuple], token_bu
             # Guard against a stray/dangling _src/_tgt (hand-edited or adversarial
             # graph.json): only trust them when they name exactly this edge's
             # endpoints, else fall back to (u, v). Without this, G.nodes[src]
-            # would KeyError on an unknown id (#2080 review).
+            # would KeyError on an unknown id.
             if {src, tgt} != {u, v}:
                 src, tgt = u, v
             context = d.get("context")
@@ -952,11 +950,11 @@ def _subgraph_to_text(G: nx.Graph, nodes: set[str], edges: list[tuple], token_bu
         # lost. Announcing "showing N of N nodes … among the 0 cut nodes" then
         # reads as a false truncation warning that teaches an agent to distrust a
         # complete answer and burn follow-up narrowing calls for nodes that were
-        # never cut (#2601). When every node is shown the answer is complete, so
+        # never cut. When every node is shown the answer is complete, so
         # edges are never dropped either (returning output[:cut_at] here would
         # silently truncate them) — but that completeness guarantee is exactly
         # why a query can quietly cost 4-6x its requested budget once the last
-        # node crosses the fit line (#2784): the check above only ever compared
+        # node crosses the fit line: the check above only ever compared
         # the FULL output (nodes+edges) against char_budget, so this branch was
         # already known to be over budget, yet said nothing about it. Report the
         # real size instead of silence — still the complete, non-truncated
@@ -1039,7 +1037,7 @@ def _query_graph_text(
     # Relational-intent verbs ("calls", "uses", ...) describe the relation the
     # question asks about, not a symbol to seed from; drop them from the
     # per-term seed GUARANTEE so an incidental verb match cannot seat a decoy
-    # BFS root (#2507). They keep their place in `qs.ranked`, so a genuine
+    # BFS root. They keep their place in `qs.ranked`, so a genuine
     # identifier named after a verb can still win a seat on merit via the gap
     # window — and when the query consists ONLY of intent words (bare "calls"),
     # the guarantee is left intact so such an identifier stays reachable.
@@ -1087,9 +1085,9 @@ def _find_node_tiers(
     # stored `norm_label` keeps punctuation ("blockstream.ts"). Matching only via
     # `term`/`label_tokens` works when the node label tokenizes the same way, but is
     # fragile if `label` and `norm_label` diverge. `norm_query` matches `norm_label`
-    # symmetrically so an exactly-typed punctuated label always resolves (#1704).
+    # symmetrically so an exactly-typed punctuated label always resolves.
     # `nid_norm` below extends that symmetry to node ids, which keep their
-    # punctuation too and are compared raw against the tokenized `term` (#2467).
+    # punctuation too and are compared raw against the tokenized `term`.
     norm_query = _strip_diacritics(str(label)).lower().strip()
     source_exact: list[str] = []
     exact: list[str] = []
@@ -1137,7 +1135,7 @@ def _find_node_tiers(
             if str(G.nodes[nid].get("source_location", "")) != "L1":
                 continue
             # File-node label is the bare basename OR a directory-qualified form
-            # from the #2032 disambiguation pass (e.g. "process-order/index.ts").
+            # from the disambiguation pass (e.g. "process-order/index.ts").
             lbl = _strip_diacritics(str(G.nodes[nid].get("label") or "")).lower()
             if lbl == query_basename or lbl.endswith("/" + query_basename):
                 preferred.append(nid)
@@ -1171,7 +1169,7 @@ def find_node_ambiguity(G: nx.Graph, label: str) -> list[str]:
     tier is split that way, else `[]`. Several matches *within one file* (a file
     node plus its members) are ordinary precedence, not ambiguity, and return `[]`.
 
-    `_disambiguate_file_node_labels` (#2032) already relabels colliding *file*
+    `_disambiguate_file_node_labels` already relabels colliding *file*
     nodes; this covers the symbol case it does not reach.
     """
     for tier in _find_node_tiers(G, label):

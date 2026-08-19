@@ -397,7 +397,7 @@ def cmd_export_html(args) -> int:
     if not graph_path.exists():
         _err(f"error: graph not found: {graph_path}. Run /kg <path> first.")
         return 1
-    # Over-cap fallback (#1019): an oversized graph.json should not be a hard
+    # Over-cap fallback: an oversized graph.json should not be a hard
     # error for the HTML view; fall back to the community-aggregation view.
     over_cap = False
     try:
@@ -455,7 +455,7 @@ def cmd_export_html(args) -> int:
             html_target.unlink()
         print("--no-viz: skipped graph.html")
         return 0
-    # Over-cap fallback (#1019): force the community-aggregation path so the
+    # Over-cap fallback: force the community-aggregation path so the
     # oversized graph still renders a usable artifact.
     effective_node_limit = 5000 if over_cap else node_limit
     to_html(G, communities, str(out_dir / "graph.html"),
@@ -890,7 +890,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--root", required=True)
     sp.add_argument("--directed", action="store_true")
     sp.add_argument("--force", action="store_true",
-                    help="override the #479 shrink-guard (intentional graph reduction, e.g. deleted files)")
+                    help="override the shrink-guard (intentional graph reduction, e.g. deleted files)")
     sp.set_defaults(func=cmd_build)
 
     sp = sub.add_parser("diagnose", help="read-only graph health check")

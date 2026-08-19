@@ -3,13 +3,13 @@
 
 The output directory is the literal ``kg-out`` under the current working
 directory. Upstream graphify made this overridable with an env var
-(worktrees or shared-output setups, #686); kg hardcodes ``kg-out`` and
+(worktrees or shared-output setups); kg hardcodes ``kg-out`` and
 deletes the env-var mechanism entirely.
 
 This used to be duplicated as an identical constant in
 ``__main__``, ``cache``, and ``watch``, while ``security`` and ``callflow_html``
-hardcoded the literal output-dir name and silently ignored the override
-(#1423). Centralising it here keeps the name in one place.
+hardcoded the literal output-dir name and silently ignored the override.
+Centralising it here keeps the name in one place.
 """
 
 from __future__ import annotations
@@ -112,7 +112,7 @@ def default_graph_json() -> str:
     """Default ``graph.json`` path under the output dir.
 
     The package-wide fallback used by serve/build/benchmark and the read
-    commands (#1423).
+    commands.
     """
     return str(out_path("graph.json"))
 
@@ -128,9 +128,9 @@ def is_absolute_any_platform(p: "str | Path | None") -> bool:
 
     - On Windows, ``WindowsPath("/home/ci/repo/docs/a.md").is_absolute()`` is
       False — no drive letter — so a Linux-built graph's absolute paths read as
-      relative and get baked into node IDs or joined under the scan root (#2618).
+      relative and get baked into node IDs or joined under the scan root.
     - On POSIX, ``PosixPath("C:/Users/u/a.md").is_absolute()`` is False for the
-      mirror-image reason (#2197, #1789).
+      mirror-image reason.
 
     ``os.path.isabs`` is additionally not stable across supported interpreters:
     Python 3.13 changed ``ntpath.isabs`` so a path starting with a single slash
@@ -158,7 +158,7 @@ def nfc(s: str) -> str:
     macOS (HFS+/APFS) reports filenames in NFD while manifests, graph
     ``source_file`` entries and user input are typically NFC. Comparing raw
     strings makes the same file look like two different paths, so any path
-    membership test must normalize BOTH sides (#2210, #2221/#2224).
+    membership test must normalize BOTH sides.
     """
     import unicodedata
     return unicodedata.normalize("NFC", s)
@@ -170,7 +170,7 @@ def load_node_link_graph(path_or_data):
     The clustered writer stores edges under ``links`` (networkx's node-link
     default); the raw no-cluster writer stores them under ``edges``.
     Consumers that call ``node_link_graph(data, edges="links")`` directly
-    raise ``KeyError: 'links'`` on a raw graph (#2212) — the ``except
+    raise ``KeyError: 'links'`` on a raw graph — the ``except
     TypeError`` fallback only covers old networkx without the ``edges``
     kwarg, not the missing key. Normalize before parsing, same idiom as
     affected.py/serve.py upstream.

@@ -85,7 +85,7 @@ def test_save_semantic_cache_overwrites_by_default(tmp_path):
 
 
 def test_save_semantic_cache_rejects_out_of_scope_source_file(tmp_path):
-    """#1757: an undispatched file must keep its complete cache entry when a
+    """An undispatched file must keep its complete cache entry when a
     semantic result misattributes a node to it."""
     intended = tmp_path / "intended.md"
     intended.write_text("# Intended\n")

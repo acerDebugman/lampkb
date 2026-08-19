@@ -170,7 +170,7 @@ def diagnose_extraction(
     canonical_edges = [_canonical_edge(edge) for edge in raw_edges]
 
     # Code-typed semantic nodes the extractor could not verify against the source
-    # it read (#1949): likely-inferred (or hallucinated) symbols surfaced from a
+    # it read: likely-inferred (or hallucinated) symbols surfaced from a
     # document. Count them so the flag on graph.json nodes is actually surfaced.
     unverified_node_count = sum(
         1 for n in extraction.get("nodes", [])

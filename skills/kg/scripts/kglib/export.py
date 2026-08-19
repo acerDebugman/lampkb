@@ -140,7 +140,7 @@ _CONFIDENCE_SCORE_DEFAULTS = {"EXTRACTED": 1.0, "INFERRED": 0.5, "AMBIGUOUS": 0.
 def attach_hyperedges(G: nx.Graph, hyperedges: list) -> None:
     """Store hyperedges in the graph's metadata dict."""
     existing = G.graph.get("hyperedges", [])
-    # Skip id-less persisted entries when seeding the dedup set (#2775): the
+    # Skip id-less persisted entries when seeding the dedup set: the
     # semantic extractor emits hyperedges with no `id` and build.py persists them
     # verbatim, so a prior graph.json can contain id-less hyperedges. A hard
     # `h["id"]` here raised `KeyError: 'id'` on every incremental re-extract,
@@ -157,8 +157,8 @@ def attach_hyperedges(G: nx.Graph, hyperedges: list) -> None:
 def _git_head(cwd: "str | Path | None" = None) -> str | None:
     """Return git HEAD for the repo containing ``cwd``, or None outside a repo.
 
-    ``cwd`` selects the repository to ask, exactly as in watch._git_head
-    (#2316). Without it the command inherits the caller's working directory,
+    ``cwd`` selects the repository to ask, exactly as in watch._git_head.
+    Without it the command inherits the caller's working directory,
     which stamps the *invoking* repo's commit when the graph being written
     describes a different repo — provenance must come from the repo the graph
     describes, so callers pass the graph's own location.
@@ -176,7 +176,7 @@ def _git_head(cwd: "str | Path | None" = None) -> str | None:
 
 # Sentinel: an existing graph.json is present and non-empty but cannot be parsed
 # into a node count (corrupt, mid-write, or structurally wrong). The caller must
-# fail CLOSED on this — the same way to_json's #479 guard refuses to overwrite
+# fail CLOSED on this — the same way to_json's guard refuses to overwrite
 # such a file — because we cannot prove the new graph isn't a silent shrink.
 MALFORMED_GRAPH = object()
 
@@ -191,9 +191,9 @@ def existing_graph_node_count(path: "str | Path"):
         replace an empty/oversized file);
       - :data:`MALFORMED_GRAPH` when the file is present and non-empty but
         unparseable — the caller must treat this as fail-closed (refuse to
-        overwrite), mirroring to_json's #479 handling of a corrupt/mid-write file.
+        overwrite), mirroring to_json's handling of a corrupt/mid-write file.
 
-    The raw no-cluster write path uses this to apply the same #479 shrink
+    The raw no-cluster write path uses this to apply the same shrink
     guard that :func:`to_json` applies inline for the clustered path.
     """
     p = Path(path)
@@ -224,7 +224,7 @@ def existing_graph_node_count(path: "str | Path"):
 
 
 def to_json(G: nx.Graph, communities: dict[int, list[str]], output_path: str, *, force: bool = False, built_at_commit: str | None = None, community_labels: dict[int, str] | None = None) -> bool:
-    # Safety check: refuse to silently shrink an existing graph (#479)
+    # Safety check: refuse to silently shrink an existing graph
     existing_path = Path(output_path)
     if not force and existing_path.exists():
         from kglib.security import check_graph_file_size_cap
@@ -255,7 +255,7 @@ def to_json(G: nx.Graph, communities: dict[int, list[str]], output_path: str, *,
                     # mid-write): we cannot verify the new graph is not a silent
                     # shrink. Fail SAFE — refuse rather than overwrite. A
                     # fail-OPEN here (the prior behavior) is the silent data-loss
-                    # path #479 exists to prevent: a transiently unreadable
+                    # path this guard exists to prevent: a transiently unreadable
                     # graph.json would let a partial rebuild clobber a good one.
                     import sys as _sys
                     print(
@@ -303,7 +303,7 @@ def to_json(G: nx.Graph, communities: dict[int, list[str]], output_path: str, *,
         # Restore original edge direction. Undirected NetworkX storage may
         # canonicalize endpoint order, flipping `calls` and other directional
         # edges in graph.json. The build path stashes the true endpoints in
-        # _src/_tgt for exactly this purpose (#563).
+        # _src/_tgt for exactly this purpose.
         true_src = link.pop("_src", None)
         true_tgt = link.pop("_tgt", None)
         if true_src is not None and true_tgt is not None:
@@ -312,7 +312,7 @@ def to_json(G: nx.Graph, communities: dict[int, list[str]], output_path: str, *,
     data["nodes"].sort(key=_json_sort_key)
     data["links"].sort(key=_json_sort_key)
     if "hyperedges" not in getattr(G, "graph", {}):
-        # Hardening (#2485): a graph with NO hyperedges key at all was built by
+        # Hardening: a graph with NO hyperedges key at all was built by
         # a path that never engaged hyperedge metadata — distinct from an
         # intentional empty set ([], which build_from_json now stores
         # explicitly after a full-wipeout revalidation). If the file on disk
@@ -320,7 +320,7 @@ def to_json(G: nx.Graph, communities: dict[int, list[str]], output_path: str, *,
         # data loss; warn loudly so the wipeout is attributable. We still write
         # the graph's truth rather than preserving the stale set — resurrecting
         # hyperedges whose members may no longer exist would reintroduce the
-        # dangling-member shape #1916 removed.
+        # dangling-member shape we removed.
         _prev_hyperedges = None
         try:
             if existing_path.exists():
@@ -345,7 +345,7 @@ def to_json(G: nx.Graph, communities: dict[int, list[str]], output_path: str, *,
     data["hyperedges"] = hyperedges
     # Fallback provenance comes from the repo the graph is being written INTO
     # (output_path lives in <target>/kg-out/), never the shell's cwd —
-    # the same cwd-anchoring mistake #2316 fixed for `update`.
+    # the same cwd-anchoring mistake fixed for `update`.
     commit = built_at_commit if built_at_commit is not None else _git_head(Path(output_path).resolve().parent)
     if commit:
         data["built_at_commit"] = commit
@@ -590,7 +590,7 @@ function focusNode(nodeId) {{
 // inline onclick. A node id/label sourced from a document (kg save-result)
 // can contain a double-quote; dropping the stringified id unescaped into a
 // quoted onclick both broke every link and allowed a hostile source to inject
-// an event handler into the local report (stored XSS, #1838). esc() on
+// an event handler into the local report (stored XSS). esc() on
 // data-nid keeps the value inside the attribute; the listener reads it back
 // verbatim. Bound to document so it survives the innerHTML rebuild that
 // recreates #neighbors-list on each showInfo().
@@ -720,7 +720,7 @@ def _html_document_title(output_path: str) -> str:
     """Return a portable label for the graph.html <title>.
 
     Tracked artifacts must not embed the generator host absolute path
-    (regression of #433; reported again as #2598 on Windows). Keep from the
+    (a regression reported again on Windows). Keep from the
     output-dir bare name (``kg-out``) onward — portable in every case;
     otherwise fall back to a cwd-relative label, and finally the filename only.
     """
@@ -738,7 +738,7 @@ def _html_document_title(output_path: str) -> str:
         parts = parts[1:]
     # Prefer keeping from the output-dir marker onward: portable in every
     # case, whereas a cwd-relative path still leaks host/user segments when
-    # the graph is built from a directory ABOVE the project (#2598 follow-up).
+    # the graph is built from a directory ABOVE the project.
     marker = KG_OUT_NAME
     for i, part in enumerate(parts):
         if part == marker or part.startswith("kg-out"):
@@ -921,7 +921,7 @@ def to_html(
     # Build edges list. Restore original edge direction from _src/_tgt
     # (stashed by build.py for exactly this reason): undirected NetworkX
     # canonicalizes endpoint order, which would otherwise flip the arrow
-    # for `calls` and `rationale_for` in the rendered graph (#563).
+    # for `calls` and `rationale_for` in the rendered graph.
     vis_edges = []
     for u, v, data in G.edges(data=True):
         confidence = data.get("confidence", "EXTRACTED")

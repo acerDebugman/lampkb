@@ -1,4 +1,4 @@
-# Ported from graphify/tests/test_query_induced_edges.py (#2323: query must
+# Ported from graphify/tests/test_query_induced_edges.py (query must
 # render every edge between visited nodes, not just the traversal tree).
 # graphify -> kglib. `_complete_induced_edges` survived vendoring in
 # kglib/serve.py (it is part of _bfs/_dfs), so the whole file ports.
@@ -142,7 +142,7 @@ def test_completion_respects_the_context_filter():
 
 def test_self_loops_are_not_introduced():
     """A self-loop is never recorded by either traversal; the completion pass
-    skips them (surfacing them is a separate output change from #2323)."""
+    skips them (surfacing them is a separate output change)."""
     G = nx.Graph()
     _add(G, "recurse", "caller")
     _link(G, "recurse", "recurse")

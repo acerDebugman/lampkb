@@ -163,7 +163,7 @@ def test_query_engine_parity(extraction, root, tmp_path, question):
     assert edges_up == edges_kg, f"rendered edges diverged for {question!r}"
 
 
-# --- shrink-guard parity (#479) ---------------------------------------------
+# --- shrink-guard parity -----------------------------------------------------
 
 def _mk_graph(n: int) -> nx.Graph:
     G = nx.Graph()

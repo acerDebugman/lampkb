@@ -18,7 +18,7 @@ def test_classify_markdown():
 
 
 def test_classify_skill():
-    # #1901: .skill agent files (Markdown with YAML frontmatter) were dropped as unclassified.
+    # .skill agent files (Markdown with YAML frontmatter) were dropped as unclassified.
     assert classify_file(Path("10_Orchestrator.skill")) == FileType.DOCUMENT
 
 
@@ -73,7 +73,7 @@ def test_classify_md_doc_without_signals(tmp_path):
     assert classify_file(doc) == FileType.DOCUMENT
 
 
-# --- sensitive-file detection (upstream: #920 / #1666 / #2106 regression set) ---
+# --- sensitive-file detection (upstream regression set) ---
 
 def test_sensitive_flags_api_token_txt():
     assert _is_sensitive(Path("api_token.txt"))
@@ -92,19 +92,19 @@ def test_sensitive_does_not_flag_tokenizer_py():
 
 
 def test_sensitive_does_not_flag_passwords_py():
-    # #1666: a programming-language source file named after a domain noun is a
+    # A programming-language source file named after a domain noun is a
     # module, not a secret store.
     assert not _is_sensitive(Path("passwords.py"))
 
 
 def test_sensitive_does_not_flag_ruby_code_modules():
-    # #1666 exact cases: Rails source modules with keyword-ish names must survive.
+    # Exact cases: Rails source modules with keyword-ish names must survive.
     assert not _is_sensitive(Path("app/models/device_token.rb"))
     assert not _is_sensitive(Path("app/controllers/api/v1/passwords_controller.rb"))
 
 
 def test_sensitive_still_flags_data_secret_stores():
-    # #1666 guard: the exemption is ONLY for real source code, not data/config
+    # Guard: the exemption is ONLY for real source code, not data/config
     # formats — credentials.json / oauth_token.json / secrets.yaml are the secret
     # stores Stage 3 must keep catching (even though .json routes through CODE).
     assert _is_sensitive(Path("credentials.json"))
@@ -112,7 +112,7 @@ def test_sensitive_still_flags_data_secret_stores():
 
 
 def test_sensitive_prose_topic_slugs_survive(tmp_path):
-    # #2106: a heavily-linked wiki article ABOUT tokens is not a credential
+    # A heavily-linked wiki article ABOUT tokens is not a credential
     # store; a bare keyword name (secrets.md) still reads as a dump.
     assert not _is_sensitive(Path("token-economics-of-recall.md"))
     assert _is_sensitive(Path("secrets.md"))
@@ -122,7 +122,7 @@ def test_sensitive_prose_topic_slugs_survive(tmp_path):
 # --- to tmp_path; and a sensitive-file end-to-end skip) ----------------------
 
 def test_detect_skips_noise_dirs(tmp_path):
-    """Noise dirs (framework caches, venvs, kg-out itself) are skipped (#873);
+    """Noise dirs (framework caches, venvs, kg-out itself) are skipped;
     non-noise dot dirs (.github) are allowed through."""
     (tmp_path / "docs").mkdir()
     (tmp_path / "docs" / "real.md").write_text("# Real doc\n")

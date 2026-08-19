@@ -15,7 +15,7 @@ def _mkG(n):
 
 
 def test_to_json_refuses_shrink(tmp_path):
-    """#479: refuse to silently overwrite an existing graph with fewer nodes."""
+    """Refuse to silently overwrite an existing graph with fewer nodes."""
     p = tmp_path / "graph.json"
     json.dump({"nodes": [{"id": f"n{i}"} for i in range(5)]}, p.open("w"))
     assert to_json(_mkG(2), {}, str(p), force=False) is False
@@ -43,7 +43,7 @@ def test_to_json_proceeds_on_empty_existing(tmp_path):
 
 
 def test_to_html_handles_null_source_file_and_label(tmp_path):
-    """#1775: a node with source_file=None or label=None must not crash to_html."""
+    """A node with source_file=None or label=None must not crash to_html."""
     import networkx as nx
     G = nx.Graph()
     G.add_node("n1", label="Foo", source_file=None, community=0)
@@ -60,7 +60,7 @@ def test_existing_graph_node_count(tmp_path):
     p.write_text("", encoding="utf-8")
     assert existing_graph_node_count(p) is None            # empty -> nothing to protect
     # Non-empty but unparseable must fail CLOSED (sentinel), matching to_json's
-    # #479 guard — a corrupt/mid-write file could be hiding a complete graph.
+    # shrink guard — a corrupt/mid-write file could be hiding a complete graph.
     p.write_text("{not json", encoding="utf-8")
     assert existing_graph_node_count(p) is MALFORMED_GRAPH  # malformed -> fail closed
     p.write_text('{"nodes": "notalist"}', encoding="utf-8")

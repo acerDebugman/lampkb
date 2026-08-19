@@ -26,29 +26,29 @@ def _stamped_manifest_files(
     """Manifest-safe files dict: only stamp semantic files that actually
     produced output (cache hit or fresh extraction). Files whose chunk failed
     have no source_file entry in sem_result — leaving their semantic_hash
-    empty so detect_incremental re-queues them (#933).
+    empty so detect_incremental re-queues them.
 
     A file in ``partial_source_files`` DID produce output this run, but only a
     truncated fragment of it, so it is excluded from stamping too — otherwise
     detect_incremental would see it "done" and never re-dispatch it, leaving the
-    incomplete node set live forever on the warm-incremental path. Same #933
-    mechanism: leave it unstamped and it is re-queued next run.
+    incomplete node set live forever on the warm-incremental path. The same
+    mechanism applies: leave it unstamped and it is re-queued next run.
 
     Both sides of the membership test are resolved against the scan ``root``
-    before comparing (#1897): node/edge/hyperedge ``source_file`` values are
+    before comparing: node/edge/hyperedge ``source_file`` values are
     root-relative on a fresh extraction while ``files_by_type`` entries are
     absolute (from detect()), so a raw string comparison never matched and
     every freshly-extracted semantic doc was dropped from the manifest.
-    Mirrors the #1890 path normalization in graphify.llm.
+    Mirrors the path normalization in graphify.llm.
 
-    Hyperedges are counted as output (#1920): a chunk whose only result for a
+    Hyperedges are counted as output: a chunk whose only result for a
     document is a hyperedge (3+ nodes sharing a concept) is valid output that
     the semantic cache persists per-``source_file`` — omitting it here left the
     doc unstamped, so detect_incremental re-queued it on every run. The stamping
     condition mirrors the cache-write keying (a hyperedge carries its own
     ``source_file``); do not derive it from member nodes.
 
-    ``failed_ast_sources`` (#2543): code files whose AST extractor errored
+    ``failed_ast_sources``: code files whose AST extractor errored
     (missing optional extra, etc.) or returned zero nodes. They must not be
     stamped as up-to-date or a later install of the extra will never re-run.
     Kept for signature parity although kg has no AST pass (never set).
@@ -119,7 +119,7 @@ def _legacy_id_note(raw: dict) -> None:
         from kglib.build import graph_has_legacy_ids as _legacy
         if _legacy(raw.get("nodes", [])):
             print(
-                "[kg] note: this graph uses the pre-#1504 node-ID scheme; "
+                "[kg] note: this graph uses the legacy node-ID scheme; "
                 "re-run a full build to get path-qualified IDs "
                 "(fixes same-name-file collisions).",
                 file=sys.stderr,
@@ -157,7 +157,7 @@ def run_query(
         # a seed with no outgoing edges. Direction is instead preserved
         # per-edge below (mirrors kglib/build.py's _src/_tgt pattern)
         # so the *rendering* stays correct without narrowing traversal.
-        # Keep in-file markers when present (#2309): unconditionally
+        # Keep in-file markers when present: unconditionally
         # overwriting them with source/target would clobber the true
         # direction of a link persisted in flipped endpoint order.
         _raw = dict(
@@ -228,7 +228,7 @@ def run_path(
     # `references` and a `calls` edge between the same two nodes) survive load
     # instead of being silently collapsed last-writer-wins — otherwise the
     # printed relation could be one the traversed pair doesn't actually
-    # carry (#2074). Local to this read; serve's shared graph is untouched.
+    # carry. Local to this read; serve's shared graph is untouched.
     _raw = {**_raw, "directed": True, "multigraph": True}
     try:
         G = json_graph.node_link_graph(_raw, edges="links")
@@ -246,7 +246,7 @@ def run_path(
     tgt_nid = _pick_scored_endpoint(G, tgt_scored, target_label)
     # Ambiguity guard: when both queries resolve to the same node, the
     # shortest path is trivially zero hops, which is almost never what the
-    # caller wanted (see bug #828).
+    # caller wanted.
     if src_nid == tgt_nid:
         print(
             f"'{source_label}' and '{target_label}' both resolved to the same "
@@ -269,7 +269,7 @@ def run_path(
                     f"(top score {_top:g}, runner-up {_runner:g})",
                     file=sys.stderr,
                 )
-    # Deterministic shortest path (#2074): hash-seeded neighbor views
+    # Deterministic shortest path: hash-seeded neighbor views
     # returned an arbitrary route among equal-length paths that varied per
     # process. Build a sorted, materialized graph so neighbor order — and
     # thus the chosen path — is canonical for a given graph.json.
@@ -280,9 +280,9 @@ def run_path(
             _und.add_edges_from(sorted((min(u, v), max(u, v)) for u, v in G.edges()))
             path_nodes = nx.shortest_path(_und, src_nid, tgt_nid)
         else:
-            # Directed by default (#2487). True direction is NOT raw arc
+            # Directed by default. True direction is NOT raw arc
             # order: legacy canonicalized files persist a flipped arc with
-            # _src/_tgt markers (#2309), so build the digraph from _src/_tgt
+            # _src/_tgt markers, so build the digraph from _src/_tgt
             # (falling back to the loaded arc) rather than to_directed().
             _dg = nx.DiGraph()
             _dg.add_nodes_from(sorted(G.nodes))
@@ -305,10 +305,10 @@ def run_path(
     for i in range(len(path_nodes) - 1):
         u, v = path_nodes[i], path_nodes[i + 1]
         # Report the ACTUAL stored relation(s) of the traversed pair and
-        # direction — never a fabricated `calls` (#2074). A pair may carry
+        # direction — never a fabricated `calls`. A pair may carry
         # several parallel relations; show all, and fall back to an honest
         # "related" when the stored edge has no relation.
-        # Direction truth lives in the per-link _src/_tgt markers (#2309):
+        # Direction truth lives in the per-link _src/_tgt markers:
         # undirected NetworkX storage canonicalizes endpoint order, so the
         # persisted source/target arc can be flipped relative to the real
         # caller→callee direction. Recover it from _src when present, else
@@ -408,7 +408,7 @@ def run_explain(label: str, *, graph_path: str | None = None) -> int:
     connections: list[tuple[str, str, dict]] = []  # (direction, neighbor_id, edge_data)
     # Classify by the edge's TRUE direction, not the loaded arc order:
     # a link persisted in flipped endpoint order carries its truth in the
-    # per-edge _src marker (#2309). Markerless edges fall back to the arc
+    # per-edge _src marker. Markerless edges fall back to the arc
     # tail (today's behavior).
     for nb in G.successors(nid):
         _ed = edge_data(G, nid, nb)
@@ -437,7 +437,7 @@ def run_explain(label: str, *, graph_path: str | None = None) -> int:
         if len(connections) > 20:
             remainder = connections[20:]
             print(f"  ... and {len(remainder)} more")
-            # #2009: a bare count silently hides the answer on high-degree
+            # A bare count silently hides the answer on high-degree
             # nodes ("what references this, what's the impact?"). Group the cut
             # connections by direction + file so their shape is visible
             # without falling back to a corpus-wide grep.
@@ -530,7 +530,7 @@ def run_cluster_only(
         return 1
 
     print("Loading existing graph...")
-    # Solution 3 (#1019): don't hard-exit on an oversized graph.json here.
+    # Solution 3: don't hard-exit on an oversized graph.json here.
     # Core outputs (graph.json + GRAPH_REPORT.md) still get written; the
     # graph.html render below falls back to the community-aggregation view
     # (node_limit=5000) when over the cap.
@@ -555,11 +555,11 @@ def run_cluster_only(
     print(f"Graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
     print("Re-clustering...")
     communities = cluster(G, resolution=resolution, exclude_hubs_percentile=exclude_hubs)
-    # Mirror the watch/update path (#822): map new cids to prior ones by
+    # Mirror the watch/update path: map new cids to prior ones by
     # node-overlap so the existing .kg_labels.json keeps attaching
     # to the same conceptual community after re-clustering. Without this,
     # labels follow raw cid index and become misaligned whenever the
-    # graph has changed between labeling and cluster-only (#1027).
+    # graph has changed between labeling and cluster-only.
     previous_node_community = {
         n["id"]: n["community"]
         for n in _raw.get("nodes", [])
@@ -573,9 +573,9 @@ def run_cluster_only(
     # Where outputs (GRAPH_REPORT.md, re-clustered graph.json, labels,
     # analysis, html) land. When `--graph` points at a graph INSIDE a
     # kg-out/ dir (another project/tenant's output), write beside it,
-    # not into a stray kg-out/ in the CWD (#1747). But when `--graph`
+    # not into a stray kg-out/ in the CWD. But when `--graph`
     # points at an arbitrary path — e.g. a `backup/graph.json` archived
-    # before re-clustering (#934) — fall back to the CWD's kg-out/,
+    # before re-clustering — fall back to the CWD's kg-out/,
     # which is the restore-into-place workflow that test pins. The default
     # (no --graph) case already has graph_json under watch_path/kg-out.
     _out_name = Path(KG_OUT).name
@@ -625,7 +625,7 @@ def run_cluster_only(
             # A persisted "Community {cid}" is a placeholder, not an earned
             # label — treat it as absent so the hub labeler replaces it and an
             # already-polluted sidecar heals instead of suppressing real
-            # labels forever (#2073).
+            # labels forever.
             have_label = (
                 cid in existing_labels
                 and existing_labels[cid] != f"Community {cid}"
@@ -658,25 +658,25 @@ def run_cluster_only(
     else:
         # No labels file yet. When run standalone there is no orchestrating
         # agent to do the skill's labeling step, so auto-name communities
-        # after their highest-degree hub rather than leave "Community N"
-        # (#1097). kg has no LLM backend to override these.
+        # after their highest-degree hub rather than leave "Community N".
+        # kg has no LLM backend to override these.
         print("Labeling communities...")
         labels = label_communities_by_hub(G, communities)
     questions = suggest_questions(G, communities, labels)
     # cluster-only re-clusters an EXISTING graph: the content is exactly
     # what the build saw, so keep the build-time commit stamp instead of
-    # re-deriving it from the shell's cwd (#2534).
+    # re-deriving it from the shell's cwd.
     _commit = _raw.get("built_at_commit")
     if not _commit:
         from kglib.export import _git_head as _gh
         _commit = _gh(cwd=watch_path)
     # Snapshot BEFORE any artifact is replaced: GRAPH_REPORT.md was written
-    # first, so the dated folder held the NEW report, not the previous (#2402).
+    # first, so the dated folder held the NEW report, not the previous.
     from kglib.export import backup_if_protected as _backup
     _backup(out)
-    # The #479 guard can refuse this write, so it goes before the sidecars —
+    # The shrink-guard can refuse this write, so it goes before the sidecars —
     # a report and labels describing a clustering graph.json does not contain
-    # are worse than no run at all (#2436).
+    # are worse than no run at all.
     if not to_json(G, communities, str(out / "graph.json"),
                    community_labels=labels, built_at_commit=_commit):
         print(
@@ -723,7 +723,7 @@ def run_cluster_only(
         print(f"Done - {len(communities)} communities. GRAPH_REPORT.md and graph.json updated (--no-viz; graph.html removed).")
     else:
         try:
-            # Over-cap fallback (#1019): force the community-aggregation
+            # Over-cap fallback: force the community-aggregation
             # path so an oversized graph still renders a usable graph.html.
             _node_limit = 5000 if _over_cap else None
             to_html(G, communities, str(html_target), community_labels=labels or None,

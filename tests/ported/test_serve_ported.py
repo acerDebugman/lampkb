@@ -84,7 +84,7 @@ def test_score_nodes_multiword_exact_label_outranks_superset():
 
 
 def test_score_nodes_coverage_full_coverage_query_is_unchanged():
-    """Coverage scaling (#1602) must not touch full-coverage queries: a
+    """Coverage scaling must not touch full-coverage queries: a
     single-term identifier lookup keeps the exact tier's full magnitude."""
     G = _make_graph()
     scored = _score_nodes(G, ["extract"])
@@ -116,5 +116,5 @@ def test_query_terms_all_stopwords_falls_back_to_unfiltered():
 
 
 def test_query_terms_drops_german_question_stopwords():
-    # #1900: German full-sentence queries must reduce to the content noun.
+    # German full-sentence queries must reduce to the content noun.
     assert _query_terms("Wie funktioniert die Authentifizierung?") == ["authentifizierung"]

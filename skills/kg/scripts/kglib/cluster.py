@@ -151,7 +151,7 @@ def cluster(
     exclude_hubs_percentile: if set (0-100), nodes whose degree exceeds this
         percentile are excluded from partitioning and reattached to their
         majority-vote neighbour community afterwards. Useful for staging/utility
-        super-hubs that inflate god-node rankings (#919).
+        super-hubs that inflate god-node rankings.
     """
     if G.number_of_nodes() == 0:
         return {}
@@ -232,7 +232,7 @@ def cluster(
     # Without it, the hundreds of equal-sized small communities are ordered by the
     # partitioner's (not seed-stable) enumeration order, so their integer IDs
     # permute run-to-run - which reads as massive "community churn" in a per-node
-    # cid diff even though the actual grouping is reproducible (#1090 follow-up).
+    # cid diff even though the actual grouping is reproducible.
     final_communities.sort(key=lambda nodes: (-len(nodes), tuple(sorted(map(str, nodes)))))
     return {i: sorted(nodes) for i, nodes in enumerate(final_communities)}
 

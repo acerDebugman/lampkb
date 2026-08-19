@@ -680,7 +680,7 @@ def _resolve_source_path(src: str, graph_path: Path) -> Path | None:
     for the ``kg-out`` layout, or graph.json's own dir for a flat layout — which
     avoids matching a same-named file one directory up; then the other of the
     two; then the cwd. (Upstream also consulted a committed ``.kg_root``
-    marker, #686/#1423; kg deletes that mechanism — explicit paths everywhere.)
+    marker; kg deletes that mechanism — explicit paths everywhere.)
     """
     if not src:
         return None

@@ -8,7 +8,7 @@ from kglib.build import edge_data
 
 # Builtin/mock names that can appear as annotation-derived nodes in pre-existing
 # graphs. Excluded from god-node ranking so they don't displace real abstractions
-# even if they weren't filtered at extraction time (#1147).
+# even if they weren't filtered at extraction time.
 _BUILTIN_NOISE_LABELS = frozenset({
     "str", "int", "float", "bool", "bytes", "bytearray", "complex", "object",
     "True", "False",
@@ -20,7 +20,7 @@ _BUILTIN_NOISE_LABELS = frozenset({
     "Counter", "defaultdict", "OrderedDict", "datetime", "Enum",
     "os", "sys", "re", "json", "io", "abc", "typing",
     # Swift / Foundation / SwiftUI framework symbols and module imports that
-    # otherwise dominate god-node rankings on Swift codebases (#2147)
+    # otherwise dominate god-node rankings on Swift codebases
     "Foundation", "SwiftUI", "UIKit", "AppKit", "Combine",
     "String", "Int", "Double", "Float", "Bool", "Data", "URL", "Date", "UUID",
     "Sendable", "Codable", "Decodable", "Encodable", "Equatable", "Hashable",
@@ -74,7 +74,7 @@ def _is_file_node(G: nx.Graph, node_id: str) -> bool:
     if not label:
         return False
     # File-level hub: label matches the actual source filename — bare basename OR
-    # the directory-qualified form the #2032 disambiguation pass may assign.
+    # the directory-qualified form the disambiguation pass may assign.
     source_file = attrs.get("source_file", "")
     if source_file:
         from kglib.build import _is_file_node_label
@@ -677,7 +677,7 @@ def find_import_cycles(
             continue
 
         # Deferred `import(...)` edges are real dependencies but do not form a
-        # hard file-level cycle, so they are excluded from cycle detection (#1241).
+        # hard file-level cycle, so they are excluded from cycle detection.
         if data.get("deferred"):
             continue
 
@@ -711,7 +711,7 @@ def find_import_cycles(
     # Step 2: Find simple cycles, bounded by length.
     # Pass length_bound so networkx prunes during enumeration rather than
     # enumerating all elementary cycles and post-filtering — avoids exponential
-    # blowup on dense graphs with many long cycles (#1196).
+    # blowup on dense graphs with many long cycles.
     cycles: list[list[str]] = []
     for cycle in nx.simple_cycles(file_graph, length_bound=max_cycle_length):
         if len(cycle) <= max_cycle_length:
