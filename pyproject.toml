@@ -8,6 +8,8 @@ dependencies = [
     "rapidfuzz",
     "datasketch",
     "pypdf",
+    # kglib/serve.py: Chinese segmentation (pure Python, no platform issues)
+    "jieba",
 ]
 
 [dependency-groups]
