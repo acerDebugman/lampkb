@@ -1,0 +1,46 @@
+{
+  "nodes": [
+    {"id": "papers_attention_attention_is_all_you_need", "label": "Attention Is All You Need", "file_type": "paper", "source_file": "papers/attention.md", "source_location": null, "source_url": "https://arxiv.org/abs/1706.03762", "captured_at": "2026-01-15", "author": "Vaswani et al.", "contributor": "alice"},
+    {"id": "papers_attention_self_attention", "label": "Self-Attention", "file_type": "concept", "source_file": "papers/attention.md", "source_location": null, "source_url": "https://arxiv.org/abs/1706.03762", "captured_at": "2026-01-15", "author": "Vaswani et al.", "contributor": "alice"},
+    {"id": "papers_attention_multi_head_attention", "label": "Multi-Head Attention", "file_type": "concept", "source_file": "papers/attention.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "papers_attention_scaled_dot_product", "label": "Scaled Dot-Product", "file_type": "concept", "source_file": "papers/attention.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "papers_attention_positional_encoding", "label": "Positional Encoding", "file_type": "concept", "source_file": "papers/attention.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "docs_design_transformer_adoption", "label": "Transformer Adoption", "file_type": "document", "source_file": "docs/design.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "docs_design_embedding_layer", "label": "Embedding Layer", "file_type": "concept", "source_file": "docs/design.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "docs_design_training_pipeline", "label": "Training Pipeline", "file_type": "document", "source_file": "docs/design.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "docs_design_why_multi_head", "label": "Why Multi-Head", "file_type": "rationale", "source_file": "docs/design.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null, "rationale": "Multi-head attention lets the model attend to different representation subspaces; chosen over single-head for richer gradient signal."},
+    {"id": "docs_ops_learning_rate_schedule", "label": "Learning Rate Schedule", "file_type": "concept", "source_file": "docs/ops.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "docs_ops_checkpointing", "label": "Checkpointing", "file_type": "concept", "source_file": "docs/ops.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "docs_ops_runbook", "label": "Training Runbook", "file_type": "document", "source_file": "docs/ops.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "notes_glossary_transformer", "label": "Transformer", "file_type": "concept", "source_file": "notes/glossary.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "notes_glossary_token", "label": "Token", "file_type": "concept", "source_file": "notes/glossary.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "notes_glossary_embedding", "label": "Embedding", "file_type": "concept", "source_file": "notes/glossary.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "notes_research_survey", "label": "Research Survey", "file_type": "document", "source_file": "notes/research.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null},
+    {"id": "notes_research_residual_connection", "label": "Residual Connection", "file_type": "concept", "source_file": "notes/research.md", "source_location": null, "source_url": null, "captured_at": null, "author": null, "contributor": null}
+  ],
+  "edges": [
+    {"source": "papers_attention_attention_is_all_you_need", "target": "papers_attention_self_attention", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "papers/attention.md", "source_location": null, "weight": 1.0},
+    {"source": "papers_attention_self_attention", "target": "papers_attention_multi_head_attention", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "papers/attention.md", "source_location": null, "weight": 1.0},
+    {"source": "papers_attention_self_attention", "target": "papers_attention_scaled_dot_product", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "papers/attention.md", "source_location": null, "weight": 1.0},
+    {"source": "papers_attention_attention_is_all_you_need", "target": "papers_attention_positional_encoding", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "papers/attention.md", "source_location": null, "weight": 1.0},
+    {"source": "docs_design_transformer_adoption", "target": "papers_attention_attention_is_all_you_need", "relation": "cites", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "docs/design.md", "source_location": null, "weight": 1.0},
+    {"source": "docs_design_transformer_adoption", "target": "docs_design_embedding_layer", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "docs/design.md", "source_location": null, "weight": 1.0},
+    {"source": "docs_design_transformer_adoption", "target": "docs_design_training_pipeline", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "docs/design.md", "source_location": null, "weight": 1.0},
+    {"source": "docs_design_why_multi_head", "target": "papers_attention_multi_head_attention", "relation": "rationale_for", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "docs/design.md", "source_location": null, "weight": 1.0},
+    {"source": "docs_design_training_pipeline", "target": "docs_ops_learning_rate_schedule", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "docs/ops.md", "source_location": null, "weight": 1.0},
+    {"source": "docs_ops_runbook", "target": "docs_ops_checkpointing", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "docs/ops.md", "source_location": null, "weight": 1.0},
+    {"source": "docs_ops_runbook", "target": "docs_ops_learning_rate_schedule", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "docs/ops.md", "source_location": null, "weight": 1.0},
+    {"source": "docs_ops_learning_rate_schedule", "target": "docs_ops_checkpointing", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.75, "source_file": "docs/ops.md", "source_location": null, "weight": 1.0},
+    {"source": "notes_glossary_transformer", "target": "papers_attention_attention_is_all_you_need", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "notes/glossary.md", "source_location": null, "weight": 1.0},
+    {"source": "notes_glossary_embedding", "target": "docs_design_embedding_layer", "relation": "semantically_similar_to", "confidence": "INFERRED", "confidence_score": 0.85, "source_file": "notes/glossary.md", "source_location": null, "weight": 1.0},
+    {"source": "notes_glossary_token", "target": "notes_glossary_embedding", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.65, "source_file": "notes/glossary.md", "source_location": null, "weight": 1.0},
+    {"source": "notes_research_survey", "target": "notes_research_residual_connection", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "notes/research.md", "source_location": null, "weight": 1.0},
+    {"source": "notes_research_residual_connection", "target": "papers_attention_positional_encoding", "relation": "conceptually_related_to", "confidence": "AMBIGUOUS", "confidence_score": 0.25, "source_file": "notes/research.md", "source_location": null, "weight": 1.0},
+    {"source": "notes_research_survey", "target": "papers_attention_attention_is_all_you_need", "relation": "cites", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": "notes/research.md", "source_location": null, "weight": 1.0}
+  ],
+  "hyperedges": [
+    {"id": "attention_mechanism_group", "label": "Attention Mechanism Group", "nodes": ["papers_attention_self_attention", "papers_attention_multi_head_attention", "papers_attention_scaled_dot_product"], "relation": "participate_in", "confidence": "INFERRED", "confidence_score": 0.75, "source_file": "papers/attention.md"}
+  ],
+  "input_tokens": 0,
+  "output_tokens": 0
+}

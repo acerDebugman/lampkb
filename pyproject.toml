@@ -1,0 +1,17 @@
+[project]
+name = "taoskg"
+version = "0.1.0"
+description = "Documents-only knowledge-graph tool (kg skill + vendored kglib)"
+requires-python = ">=3.10"
+dependencies = [
+    "networkx",
+    "rapidfuzz",
+    "datasketch",
+    "pypdf",
+]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.uv]
+package = false
