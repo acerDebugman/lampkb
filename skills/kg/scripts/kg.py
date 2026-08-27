@@ -65,7 +65,7 @@ def cmd_prepare(args) -> int:
     if not root.exists():
         _err(f"error: path not found: {root}")
         return 1
-    out = root / _out()
+    out = _out()
     out.mkdir(parents=True, exist_ok=True)
 
     result = detect(root)
@@ -104,7 +104,7 @@ def _cache_check_and_batch(files_by_type: dict, root: Path) -> tuple[int, list[s
     from kglib.detect import count_words
     from kglib.paths import write_text_atomic
 
-    out = root / _out()
+    out = _out()
     all_files = [f for cat in _SEM_TYPES for f in files_by_type.get(cat, [])]
     cached_nodes, cached_edges, cached_hyperedges, uncached = check_semantic_cache(all_files, root=root)
 
@@ -152,7 +152,7 @@ def cmd_merge_extraction(args) -> int:
     from kglib.cache import save_semantic_cache
 
     root = Path(args.root)
-    out = root / _out()
+    out = _out()
 
     chunks = sorted(out.glob(".kg_chunk_*.json"))
     all_nodes: list[dict] = []
@@ -253,7 +253,7 @@ def cmd_build(args) -> int:
     from kglib.export import to_json
 
     root = args.root
-    out = root / _out()
+    out = _out()
     out.mkdir(parents=True, exist_ok=True)
     extraction, detection = _load_extraction_and_detection(out)
 
@@ -307,8 +307,7 @@ def cmd_diagnose(args) -> int:
     """Step 4.5 - read-only graph health check."""
     from kglib.diagnostics import diagnose_extraction, format_diagnostic_report
 
-    root = args.root
-    out = root / _out()
+    out = _out()
     extract_path = out / ".kg_extract.json"
     if not extract_path.exists():
         _err("error: kg-out/.kg_extract.json not found — run prepare + merge-extraction first.")
@@ -341,7 +340,7 @@ def cmd_relabel(args) -> int:
     from kglib.export import to_json
 
     root = args.root
-    out = root / _out()
+    out = _out()
     try:
         labels = {int(k): str(v) for k, v in json.loads(args.labels).items()}
     except Exception as exc:
@@ -569,7 +568,7 @@ def cmd_update_detect(args) -> int:
     if not root.exists():
         _err(f"error: path not found: {root}")
         return 1
-    out = root / _out()
+    out = _out()
     out.mkdir(parents=True, exist_ok=True)
 
     result = detect_incremental(root)
@@ -619,7 +618,7 @@ def cmd_update_merge(args) -> int:
     from kglib.build import build_merge
 
     root = args.root
-    out = root / _out()
+    out = _out()
     extract_path = out / ".kg_extract.json"
     incremental_path = out / ".kg_incremental.json"
     if not extract_path.exists() or not incremental_path.exists():
