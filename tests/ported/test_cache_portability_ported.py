@@ -132,7 +132,7 @@ def test_save_cached_relativizes_source_file(tmp_path):
         "nodes": [{"id": "n1", "label": "foo", "source_file": abs_src}],
         "edges": [{"source": "n1", "target": "n1", "source_file": abs_src}],
     }
-    cache.save_cached(src, result, root=tmp_path, kind="semantic")
+    cache.save_cached(src, result, root=tmp_path, kind="semantic", cache_root=tmp_path)
 
     h = cache.file_hash(src, tmp_path)
     entry = cache.cache_dir(tmp_path, "semantic") / f"{h}.json"
@@ -156,9 +156,9 @@ def test_load_cached_absolutizes_source_file(tmp_path):
     cache.save_cached(src, {
         "nodes": [{"id": "n1", "source_file": abs_src}],
         "edges": [{"source": "n1", "target": "n1", "source_file": abs_src}],
-    }, root=tmp_path, kind="semantic")
+    }, root=tmp_path, kind="semantic", cache_root=tmp_path)
 
-    loaded = cache.load_cached(src, root=tmp_path, kind="semantic")
+    loaded = cache.load_cached(src, root=tmp_path, kind="semantic", cache_root=tmp_path)
     assert loaded is not None
     assert loaded["nodes"][0]["source_file"] == abs_src
     assert loaded["edges"][0]["source_file"] == abs_src
@@ -180,7 +180,7 @@ def test_load_cached_passes_through_legacy_absolute_source_file(tmp_path):
         "edges": [],
     }))
 
-    loaded = cache.load_cached(src, root=tmp_path, kind="semantic")
+    loaded = cache.load_cached(src, root=tmp_path, kind="semantic", cache_root=tmp_path)
     assert loaded is not None
     assert loaded["nodes"][0]["source_file"] == abs_src
 
@@ -197,14 +197,14 @@ def test_cache_portable_across_roots(tmp_path):
     cache.save_cached(src_a, {
         "nodes": [{"id": "n1", "source_file": str(src_a.resolve())}],
         "edges": [],
-    }, root=repo_a, kind="semantic")
+    }, root=repo_a, kind="semantic", cache_root=repo_a)
 
     # Copy corpus + cache to a second location with a different absolute prefix.
     repo_b = tmp_path / "repo_b"
     shutil.copytree(repo_a, repo_b)
 
     src_b = repo_b / "docs" / "foo.md"
-    loaded = cache.load_cached(src_b, root=repo_b, kind="semantic")
+    loaded = cache.load_cached(src_b, root=repo_b, kind="semantic", cache_root=repo_b)
     assert loaded is not None, (
         "cache must port across absolute prefixes (content hash + relative source_file)"
     )
@@ -219,9 +219,9 @@ def test_semantic_cache_deep_mode_roundtrip_under_deep_namespace(tmp_path):
     """mode='deep' saves under cache/semantic-deep/ and reads back from it."""
     f = tmp_path / "doc.md"
     f.write_text("# Doc\n")
-    cache.save_semantic_cache([{"id": "a", "source_file": "doc.md"}], [], root=tmp_path, mode="deep")
+    cache.save_semantic_cache([{"id": "a", "source_file": "doc.md"}], [], root=tmp_path, mode="deep", cache_root=tmp_path)
     assert (tmp_path / "kg-out" / "cache" / "semantic-deep").is_dir()
-    cached = cache.load_cached(f, root=tmp_path, kind="semantic-deep")
+    cached = cache.load_cached(f, root=tmp_path, kind="semantic-deep", cache_root=tmp_path)
     assert {n["id"] for n in cached["nodes"]} == {"a"}
 
 
@@ -230,9 +230,9 @@ def test_semantic_cache_deep_invisible_to_plain_reads_and_vice_versa(tmp_path):
     content (and vice versa)."""
     f = tmp_path / "doc.md"
     f.write_text("# Doc\n")
-    cache.save_semantic_cache([{"id": "plain", "source_file": "doc.md"}], [], root=tmp_path)
-    cache.save_semantic_cache([{"id": "deep", "source_file": "doc.md"}], [], root=tmp_path, mode="deep")
-    plain = cache.load_cached(f, root=tmp_path, kind="semantic")
-    deep = cache.load_cached(f, root=tmp_path, kind="semantic-deep")
+    cache.save_semantic_cache([{"id": "plain", "source_file": "doc.md"}], [], root=tmp_path, cache_root=tmp_path)
+    cache.save_semantic_cache([{"id": "deep", "source_file": "doc.md"}], [], root=tmp_path, mode="deep", cache_root=tmp_path)
+    plain = cache.load_cached(f, root=tmp_path, kind="semantic", cache_root=tmp_path)
+    deep = cache.load_cached(f, root=tmp_path, kind="semantic-deep", cache_root=tmp_path)
     assert {n["id"] for n in plain["nodes"]} == {"plain"}
     assert {n["id"] for n in deep["nodes"]} == {"deep"}

@@ -1,3 +1,6 @@
 # Python bytecode / compilation artifacts
 __pycache__/
 *.py[cod]
+
+# kg cache artifacts (stat-index / semantic cache written into CWD/kg-out)
+kg-out/cache/

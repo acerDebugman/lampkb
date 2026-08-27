@@ -288,11 +288,14 @@ def _ensure_stat_index(root: Path, cache_root: "Path | None" = None) -> None:
     # _stat_index_root determines the cache FILE location, so honoring an
     # explicit cache_root keeps detect()'s word-count cache under the requested
     # --out dir instead of polluting the scanned corpus with a stray
-    # kg-out/. _stat_index_anchor is the separate KEY anchor:
-    # in-memory keys stay absolute, but the on-disk index stores in-anchor keys
-    # relative so a moved/cloned corpus still hits — same load/save
-    # re-anchoring the detect manifest uses.
-    _stat_index_root = Path(cache_root if cache_root is not None else root).resolve()
+    # kg-out/. When cache_root is omitted the location follows the output-dir
+    # convention (CWD/kg-out), the same base kg.py commands use — NOT the
+    # key-anchor root, so a run from a different CWD doesn't split the cache
+    # away from the other artifacts. _stat_index_anchor is the separate KEY
+    # anchor: in-memory keys stay absolute, but the on-disk index stores
+    # in-anchor keys relative so a moved/cloned corpus still hits — same
+    # load/save re-anchoring the detect manifest uses.
+    _stat_index_root = Path(cache_root if cache_root is not None else Path.cwd()).resolve()
     _stat_index_anchor = Path(root).resolve()
     p = _stat_index_file(_stat_index_root)
     _stat_index = {}
@@ -837,8 +840,9 @@ def load_cached(path: Path, root: Path = Path("."), kind: str = "semantic",
     must stay the inferred common parent so keys remain portable). ``cache_root``
     decouples *where* the cache directory lives from that anchor — the cache is
     an output and must not land inside a read-only/analyzed source tree.
-    When ``cache_root`` is None the location falls back to ``root`` (unchanged
-    behavior for existing callers).
+    When ``cache_root`` is None the location falls back to the current working
+    directory (CWD/kg-out), the same base the kg.py commands write their
+    artifacts to.
 
     AST entries written by other graphify versions — including the legacy
     flat cache/ layout (pre-0.5.3) and the unversioned cache/ast/ layout —
@@ -858,7 +862,7 @@ def load_cached(path: Path, root: Path = Path("."), kind: str = "semantic",
     Returns None if no cache entry or file has changed.
     """
     global _legacy_semantic_hits, _corrupt_cache_entries
-    location = cache_root if cache_root is not None else root
+    location = cache_root if cache_root is not None else Path.cwd()
     try:
         h = file_hash(path, root, cache_root=cache_root)
     except OSError:
@@ -962,7 +966,7 @@ def save_cached(path: Path, result: dict, root: Path = Path("."), kind: str = "s
         # source_file pass, which owns that field's bare-relative format.
         _relativize_ids_in(on_disk, p, root)
     h = file_hash(p, root, cache_root=cache_root)
-    location = cache_root if cache_root is not None else root
+    location = cache_root if cache_root is not None else Path.cwd()
     target_dir = cache_dir(location, kind, _resolve_prompt_fp(prompt, prompt_file))
     entry = target_dir / f"{h}.json"
     fd, tmp_path = tempfile.mkstemp(dir=target_dir, prefix=f"{h}.", suffix=".tmp")
@@ -1023,7 +1027,8 @@ def check_semantic_cache(
     ``root``, mirroring :func:`load_cached` and :func:`save_semantic_cache`.
     With ``--out``, pass the corpus as ``root`` (so content-hash
     keys and relative-path resolution stay anchored to the source tree) and the
-    output directory as ``cache_root``. Omitting it keeps ``root`` for both.
+    output directory as ``cache_root``. Omitting it falls back to the current
+    working directory (CWD/kg-out).
     """
     global _legacy_semantic_hits
     kind = "semantic" if mode is None else f"semantic-{mode}"
@@ -1145,8 +1150,9 @@ def save_semantic_cache(
     source-key anchor ``root`` — mirroring the same split that :func:`load_cached`
     and :func:`save_cached` already expose. When given, cache files land
     under ``cache_root`` while ``source_file`` paths are still resolved and
-    relativized against ``root``. When omitted, ``root`` is used for both
-    purposes (unchanged behaviour for existing callers). This fixes checkpoints
+    relativized against ``root``. When omitted, the location falls back to the
+    current working directory (CWD/kg-out), the same base the kg.py commands
+    write their artifacts to. This fixes checkpoints
     and the final save going to the corpus tree instead of ``--out``.
 
     Returns the number of files cached.
