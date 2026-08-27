@@ -123,7 +123,7 @@ def test_sensitive_prose_topic_slugs_survive(tmp_path):
 
 def test_detect_skips_noise_dirs(tmp_path):
     """Noise dirs (framework caches, venvs, kg-out itself) are skipped;
-    non-noise dot dirs (.github) are allowed through."""
+    ALL hidden dot dirs (.github, .codewhale, ...) are pruned too."""
     (tmp_path / "docs").mkdir()
     (tmp_path / "docs" / "real.md").write_text("# Real doc\n")
     (tmp_path / ".next").mkdir()
@@ -132,12 +132,15 @@ def test_detect_skips_noise_dirs(tmp_path):
     (tmp_path / "node_modules" / "dep.md").write_text("# dep\n")
     (tmp_path / ".github").mkdir()
     (tmp_path / ".github" / "workflow.md").write_text("# workflow notes\n")
+    (tmp_path / ".codewhale").mkdir()
+    (tmp_path / ".codewhale" / "instructions.md").write_text("# instructions\n")
     result = detect(tmp_path)
     all_files = [f for files in result["files"].values() for f in files]
     assert any(f.endswith("docs/real.md") for f in all_files)
-    assert any(f.endswith(".github/workflow.md") for f in all_files)
     assert not any("/.next/" in f for f in all_files)
     assert not any("/node_modules/" in f for f in all_files)
+    assert not any("/.github/" in f for f in all_files)
+    assert not any("/.codewhale/" in f for f in all_files)
 
 
 def test_detect_skips_sensitive_files(tmp_path):

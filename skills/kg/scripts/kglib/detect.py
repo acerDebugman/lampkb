@@ -565,6 +565,7 @@ _SKIP_DIRS = {
     # entry is needed.
     ".obsidian", ".smart-env",  # Obsidian vault metadata and plugin caches
     ".worktrees",  # git worktree convention — sibling checkouts, always redundant
+    ".codewhale",  # CodeWhale tooling metadata/instructions — never corpus content
 }
 
 # Large generated files that are never useful to extract
@@ -644,6 +645,14 @@ def _has_venv_markers(d: "Path") -> bool:
 def _is_noise_dir(part: str, parent: "Path | None" = None) -> bool:
     """Return True if this directory name looks like a venv, cache, or dep dir."""
     if part in _SKIP_DIRS:
+        return True
+    # Hidden directories (.codewhale, .github, .claude, ...) are tooling/metadata,
+    # never corpus content — prune ALL of them, not just the known names above.
+    # This supersedes the historical "dot dirs are allowed" behavior: a corpus
+    # that genuinely documents something under a dot dir must re-include it via
+    # a `!` negation in .kgignore (the walk's last-match-wins machinery already
+    # supports that).
+    if part.startswith("."):
         return True
     if part in ("env", ".env") or part.endswith("_env"):
         # Ambiguous: a real venv OR a real source dir. Prune only on actual venv
@@ -1363,7 +1372,9 @@ def detect(root: Path, *, follow_symlinks: bool | None = None, extra_excludes: l
                         _load_dir_own_ignore(dp, gitignore=False)
                     )
                 # Prune noise dirs in-place so os.walk never descends into them.
-                # Dot dirs are allowed — users often want .github/, .claude/, etc.
+                # Hidden dirs are pruned wholesale (_is_noise_dir), so .github/,
+                # .claude/, .codewhale/ etc. never reach the corpus — a genuinely
+                # documented dot dir must be re-included via `!` in .kgignore.
                 # Framework caches (.next, .nuxt, …) are caught by _is_noise_dir.
                 # Negations need no special-casing here: _is_ignored already applies
                 # last-match-wins (so `!dir/` un-ignores a directory and it won't be
