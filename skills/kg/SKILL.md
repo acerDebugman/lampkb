@@ -33,7 +33,7 @@ Drop any folder of documents (notes, markdown, papers, text) into kg and get a q
 
 This skill assumes a host with these exact capabilities:
 
-- **uv is installed.** Every pipeline step runs as `uv run "$KG_SCRIPTS/kg.py" <subcommand>`. uv resolves the scripts' declared dependencies (networkx, rapidfuzz, datasketch, pypdf) automatically into an ephemeral environment — there is no install step, no venv to manage, and no `graphify` CLI or library involved.
+- **uv is installed.** Every pipeline step runs as `(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" <subcommand>)`. uv resolves the scripts' declared dependencies (networkx, rapidfuzz, datasketch, pypdf) automatically into an ephemeral environment — there is no install step, no venv to manage, and no `graphify` CLI or library involved.
 - **Bundled scripts are executed, never read.** All deterministic logic lives in `scripts/` beside this SKILL.md. You never need to open them — treat them as a black-box CLI.
 - **You read corpus documents yourself**: for semantic extraction (Step 3) YOU are the LLM. You read each document with your own file-reading tool and produce extraction JSON. There are no subagents — never attempt to dispatch one.
 - **Documents only**: code, image, audio, and video files are ignored by this skill. If the corpus is mostly those, stop and tell the user this skill is documents-only. PDFs are supported (text-layer extraction via pypdf).
@@ -41,7 +41,13 @@ This skill assumes a host with these exact capabilities:
 
 **Resolve KG_SCRIPTS first**: at the start of any invocation, set `KG_SCRIPTS` to the absolute path of the `scripts/` directory beside this SKILL.md (i.e. `<dir containing this SKILL.md>/scripts`). Every command below uses it.
 
-**Output directory is `kg-out/`** under the current working directory. All artifacts, sidecars, cache, and exports live there. The scripts default to it — no environment variables to set.
+**Resolve KG_ROOT too — it is the fixed working directory.** The scripts resolve the output directory as `kg-out/` **under the current working directory** (this is a hard convention; there is no env override), and several commands (`export-html`, `query`, `path`, `explain`, `save-result`, `reflect`, `vocab`, `benchmark`, `diff`, `cluster-only`) have no `--root` flag at all and read `./kg-out` from the CWD. So every invocation must run with the corpus root as its working directory:
+
+- `KG_ROOT` = the corpus root you are processing (the `INPUT_PATH` you substitute below). For graph queries on an already-built graph it is the directory that contains `kg-out/`.
+- **Run every kg.py command as a subshell from `$KG_ROOT`**: `(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" <subcommand> ...)`. The subshell pins the CWD for that one command without moving your own working directory, so artifacts, sidecars, and cache all land in `<KG_ROOT>/kg-out/` no matter where the session started.
+- Never run a kg.py command from a different directory: the output would land in the wrong `kg-out/` and the no-`--root` commands would silently read the wrong graph.
+
+**Output directory is `kg-out/`** under `$KG_ROOT` (the fixed working directory). All artifacts, sidecars, cache, and exports live there. The scripts default to it — no environment variables to set.
 
 ## What You Must Do When Invoked
 
@@ -64,7 +70,7 @@ If uv is missing, stop and show the install URL. Do not attempt pip fallbacks �
 ### Step 2 - Prepare (detect + cache check + batch planning)
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" prepare --root INPUT_PATH
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" prepare --root INPUT_PATH)
 ```
 
 This prints a JSON summary: total files/words, per-category counts, skipped sensitive files, cache hits, and how many batches the uncached documents were split into. It writes `kg-out/.kg_detect.json`, `kg-out/.kg_cached.json`, `kg-out/.kg_uncached.txt`, and `kg-out/.kg_batches.json`.
@@ -188,7 +194,7 @@ CHUNK_PATH
 **Then merge:**
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" merge-extraction --root INPUT_PATH
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" merge-extraction --root INPUT_PATH)
 ```
 
 This validates and merges all batch files (skipping invalid ones with a warning), saves the semantic cache, merges cached+new into `kg-out/.kg_extract.json`, and cleans up temp files. Token counts are 0 — self-extraction burns your context, not a metered API.
@@ -196,7 +202,7 @@ This validates and merges all batch files (skipping invalid ones with a warning)
 ### Step 4 - Build graph, cluster, analyze, generate outputs
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" build --root INPUT_PATH          # add --directed if given
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" build --root INPUT_PATH)   # add --directed if given
 ```
 
 Guards: if it prints `ERROR: Graph is empty` or a shrink-refusal (`refused to shrink kg-out/graph.json`), stop and tell the user what happened — do not proceed to labeling or visualization. If the user confirms the shrink is intentional (e.g. files were deleted), re-run with `--force`.
@@ -204,7 +210,7 @@ Guards: if it prints `ERROR: Graph is empty` or a shrink-refusal (`refused to sh
 ### Step 4.5 - Graph health check (read-only integrity gate)
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" diagnose --root INPUT_PATH       # add --directed if given
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" diagnose --root INPUT_PATH)  # add --directed if given
 ```
 
 If a `GRAPH HEALTH WARNING` prints, surface it in the final summary (do not abort — the graph is still usable, but the integrity issue must be visible, per the Honesty Rules).
@@ -214,7 +220,7 @@ If a `GRAPH HEALTH WARNING` prints, surface it in the final summary (do not abor
 Read `kg-out/.kg_analysis.json`. For each community key, look at its node labels and write a 2-5 word plain-language name (e.g. "Attention Mechanism", "Training Pipeline", "Data Loading").
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" relabel --root INPUT_PATH --labels '{"0": "Attention Mechanism", "1": "Training Pipeline"}'   # add --directed if given
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" relabel --root INPUT_PATH --labels '{"0": "Attention Mechanism", "1": "Training Pipeline"}')   # add --directed if given
 ```
 
 Substitute the actual labels dict you constructed. If this prints a shrink-refusal, surface the message — do not force past it.
@@ -224,7 +230,7 @@ Substitute the actual labels dict you constructed. If this prints a shrink-refus
 Always (unless `--no-viz`):
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" export-html                      # auto-aggregates to community view if > 5000 nodes
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" export-html)   # auto-aggregates to community view if > 5000 nodes
 ```
 
 ### Step 8 - Token reduction benchmark (only if total_words > 5000)
@@ -232,7 +238,7 @@ uv run "$KG_SCRIPTS/kg.py" export-html                      # auto-aggregates to
 If `total_words` from `kg-out/.kg_detect.json` is greater than 5,000, run:
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" benchmark
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" benchmark)
 ```
 
 Print the output directly in chat. If `total_words <= 5000`, skip silently - the graph value is structural clarity, not token compression, for small corpora.
@@ -242,7 +248,7 @@ Print the output directly in chat. If `total_words <= 5000`, skip silently - the
 ### Step 9 - Finalize (manifest, cost, cleanup) and report
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" finalize --root INPUT_PATH
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" finalize --root INPUT_PATH)
 ```
 
 This stamps the manifest (only files that actually produced extraction output), updates `kg-out/cost.json`, and deletes intermediate sidecars.
@@ -282,7 +288,7 @@ The graph is the map. Your job after the pipeline is to be the guide.
 Use when you've added or modified documents since the last run. Only re-extracts changed files.
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" update-detect --root INPUT_PATH
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" update-detect --root INPUT_PATH)
 ```
 
 If it prints "nothing to update" (no new/changed files and no deletions), stop — there is nothing to do. Otherwise it populates `kg-out/.kg_detect.json` (changed subset + full corpus), runs the cache check on the changed document/paper files, and writes fresh `kg-out/.kg_batches.json` for them. Non-document changed files (code/image/video) are ignored.
@@ -293,7 +299,7 @@ Then:
 2. **Merge into the existing graph:**
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" update-merge --root INPUT_PATH   # add --directed if given
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" update-merge --root INPUT_PATH)   # add --directed if given
 ```
 
 This prunes deleted files' nodes, applies replace-on-re-extract for changed files, rewrites `.kg_extract.json` as the full merged graph, and stamps the manifest.
@@ -301,8 +307,8 @@ This prunes deleted files' nodes, applies replace-on-re-extract for changed file
 3. **Rebuild outputs and show what changed:**
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" build --root INPUT_PATH          # add --directed if given
-uv run "$KG_SCRIPTS/kg.py" diff                             # add --directed if given; prints the graph diff, cleans up
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" build --root INPUT_PATH)   # add --directed if given
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" diff)          # add --directed if given; prints the graph diff, cleans up
 ```
 
 4. Then run Steps 4.5–9 as normal (diagnose, relabel, export-html, benchmark, finalize).
@@ -314,7 +320,7 @@ uv run "$KG_SCRIPTS/kg.py" diff                             # add --directed if 
 Skip Steps 1–3. Re-run clustering on the existing graph:
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" cluster-only
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" cluster-only)
 ```
 
 This is **self-contained**: it re-clusters, names communities, and regenerates `GRAPH_REPORT.md`, `graph.json`, and `graph.html` from the existing graph. **Do not run Steps 5–9 afterwards** — they read intermediate files that a prior build's finalize step already deleted. When it finishes, present the refreshed `GRAPH_REPORT.md` summary as usual.
@@ -349,7 +355,7 @@ Fix this **without inventing tokens** by expanding the query against the actual 
 1. Extract the token vocabulary from node labels:
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" vocab
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" vocab)
 ```
 
 2. Read `kg-out/.vocab.txt`. Then for the user's question, select **up to 12 tokens from this exact list** that semantically match the query intent. Hard constraints:
@@ -372,8 +378,8 @@ If the list is empty, say so plainly and stop — do not proceed to traversal.
 Build the **expanded query string** by joining the selected tokens with spaces. Use this string as the query — NOT the original user question. (The original question is preserved only for `save-result` at the end.)
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" query "EXPANDED_QUESTION"
-# or: uv run "$KG_SCRIPTS/kg.py" query "EXPANDED_QUESTION" --dfs --budget 3000
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" query "EXPANDED_QUESTION")
+# or: (cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" query "EXPANDED_QUESTION" --dfs --budget 3000)
 ```
 
 Answer using **only** what the graph output contains. Quote `source_location` when citing a specific fact. If the graph lacks enough information, say so - do not hallucinate edges.
@@ -381,7 +387,7 @@ Answer using **only** what the graph output contains. Quote `source_location` wh
 After writing the answer, save it back into the graph so it improves future queries. Include the expanded tokens inside the `--answer` text (e.g. `"Expanded from original query via vocab: [tokens]. Then traversed..."`) so the next `--update` extracts the expansion history as a graph node:
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" save-result --question "ORIGINAL_QUESTION" --answer "ANSWER" --type query --nodes NODE1 NODE2
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" save-result --question "ORIGINAL_QUESTION" --answer "ANSWER" --type query --nodes NODE1 NODE2)
 ```
 
 Replace `ORIGINAL_QUESTION` with the user's verbatim question, `ANSWER` with your full answer text (containing the expanded-token trace), `NODE1 NODE2` with the list of node labels you cited. This closes the feedback loop: the next `--update` will extract this Q&A as a node in the graph.
@@ -392,7 +398,7 @@ Replace `ORIGINAL_QUESTION` with the user's verbatim question, `ANSWER` with you
 - `dead_end` — the question/path led nowhere; don't re-derive it next time.
 - `corrected` — the saved answer was wrong; `--correction` records what was right.
 
-At the **start** of graph work, refresh and read the lessons: run `uv run "$KG_SCRIPTS/kg.py" reflect --if-stale` (cheap, deterministic; a no-op when `LESSONS.md` is already fresh), then read `kg-out/reflections/LESSONS.md`. It lists **preferred sources** (start there), **known dead ends** (skip them), and prior **corrections**.
+At the **start** of graph work, refresh and read the lessons: run `(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" reflect --if-stale)` (cheap, deterministic; a no-op when `LESSONS.md` is already fresh), then read `kg-out/reflections/LESSONS.md`. It lists **preferred sources** (start there), **known dead ends** (skip them), and prior **corrections**.
 
 ---
 
@@ -401,17 +407,17 @@ At the **start** of graph work, refresh and read the lessons: run `uv run "$KG_S
 Find the shortest path between two named concepts in the graph:
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" path "NODE_A" "NODE_B"
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" path "NODE_A" "NODE_B")
 ```
 
-If the graph was built with `--directed`, `path` follows edge direction and refuses when no directed path exists; pass `--undirected` to ignore direction (`uv run "$KG_SCRIPTS/kg.py" path "NODE_A" "NODE_B" --undirected`).
+If the graph was built with `--directed`, `path` follows edge direction and refuses when no directed path exists; pass `--undirected` to ignore direction (`(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" path "NODE_A" "NODE_B" --undirected)`).
 
 Then explain the path in plain language - what each hop means, why it's significant.
 
 After writing the explanation, save it back:
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" save-result --question "Path from NODE_A to NODE_B" --answer "ANSWER" --type path_query --nodes NODE_A NODE_B
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" save-result --question "Path from NODE_A to NODE_B" --answer "ANSWER" --type path_query --nodes NODE_A NODE_B)
 ```
 
 ---
@@ -421,7 +427,7 @@ uv run "$KG_SCRIPTS/kg.py" save-result --question "Path from NODE_A to NODE_B" -
 Give a plain-language explanation of a single node - everything connected to it:
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" explain "NODE_NAME"
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" explain "NODE_NAME")
 ```
 
 Then write a 3-5 sentence explanation of what this node is, what it connects to, and why those connections are significant. Use the source locations as citations.
@@ -429,7 +435,7 @@ Then write a 3-5 sentence explanation of what this node is, what it connects to,
 After writing the explanation, save it back:
 
 ```bash
-uv run "$KG_SCRIPTS/kg.py" save-result --question "Explain NODE_NAME" --answer "ANSWER" --type explain --nodes NODE_NAME
+(cd "$KG_ROOT" && uv run "$KG_SCRIPTS/kg.py" save-result --question "Explain NODE_NAME" --answer "ANSWER" --type explain --nodes NODE_NAME)
 ```
 
 ---
