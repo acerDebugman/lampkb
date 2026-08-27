@@ -246,7 +246,7 @@ def _load_extraction_and_detection(out: Path) -> tuple[dict, dict]:
 
 def cmd_build(args) -> int:
     """Step 4 - build graph, cluster, analyze, generate outputs."""
-    from kglib.build import build_from_json
+    from kglib.build import build
     from kglib.cluster import cluster, score_all
     from kglib.analyze import god_nodes, surprising_connections, suggest_questions
     from kglib.report import generate
@@ -259,7 +259,10 @@ def cmd_build(args) -> int:
 
     # root= mirrors the update runbook: relativize source_file to the same
     # base so the full build and incremental update never drift apart on re-extract.
-    G = build_from_json(extraction, root=root, directed=args.directed)
+    # build(dedup=True) runs entity deduplication (Jaro-Winkler label merging +
+    # edge rewiring), matching the incremental build_merge path so a fresh build
+    # and a later --update collapse duplicate entities the same way.
+    G = build([extraction], dedup=True, root=root, directed=args.directed)
     # Guard BEFORE any write: an empty extraction must not clobber a good graph.json /
     # GRAPH_REPORT.md / analysis sidecar. Check immediately after build.
     if G.number_of_nodes() == 0:
@@ -333,7 +336,7 @@ def cmd_diagnose(args) -> int:
 
 def cmd_relabel(args) -> int:
     """Step 5 - write curated community labels, regenerate report + graph.json."""
-    from kglib.build import build_from_json
+    from kglib.build import build
     from kglib.cluster import score_all, community_member_sigs
     from kglib.analyze import suggest_questions
     from kglib.report import generate
@@ -354,7 +357,9 @@ def cmd_relabel(args) -> int:
     analysis = _read_json(analysis_path)
 
     # root= as in build / the update runbook — same base for node-key parity.
-    G = build_from_json(extraction, root=root, directed=args.directed)
+    # build(dedup=True) mirrors cmd_build so relabel never re-inflates a graph
+    # that build already deduplicated (dedup is idempotent on a clean graph).
+    G = build([extraction], dedup=True, root=root, directed=args.directed)
     communities = {int(k): v for k, v in analysis["communities"].items()}
     cohesion = {int(k): v for k, v in analysis["cohesion"].items()}
     tokens = {"input": extraction.get("input_tokens", 0), "output": extraction.get("output_tokens", 0)}
