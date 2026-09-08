@@ -21,7 +21,7 @@ Glossary and decisions for the `kg` skill (`skills/kg/SKILL.md`) and its bundled
 - No subagents, no Gemini, no API keys; self-extraction batches capped at ≤10 files or ~30k words.
 - Frontmatter `name: kg`; slash-command `/kg`; output dir `kg-out/`.
 
-### Session 2 — lampkb standalone project (原名 taoskg)
+### Session 2 — lampkb standalone project
 
 - **Full de-coupling from graphify**: neither the `graphify` CLI nor the `graphifyy` library is a dependency. Needed logic is vendored into `skills/kg/scripts/kglib/` (copy-then-slim, preserving #issue-tagged behavior contracts such as the #479 shrink-guard, replace-on-re-extract, and manifest stamping rules #1417/#1908/#1948/#2015). Vendored files carry an attribution header. (Issue-number comments were later stripped from the code; upstream provenance for ported tests remains in `tests/ported/README.md`.)
 - **Layout**: single entry `skills/kg/scripts/kg.py` (PEP 723 header declares `networkx`, `rapidfuzz`, `datasketch`, `pypdf`; `requires-python >= 3.10`) + `skills/kg/scripts/kglib/` package located via `__file__`. Zero install; the skill directory is portable as a unit.
