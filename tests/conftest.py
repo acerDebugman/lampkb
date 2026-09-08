@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the taoskg test suite.
+"""Shared pytest fixtures for the lampkb test suite.
 
 Makes ``kglib`` (and the ``kg`` entry module) importable by pointing sys.path
 at the vendored scripts directory, and provides tmp-corpus fixtures.
@@ -14,15 +14,15 @@ import pytest
 # Re-exported for test modules that import it from conftest (test_smoke.py:16).
 from write_smoke_chunks import _edge, _node, write_smoke_chunks  # noqa: F401
 
-TAOSKG_ROOT = Path(__file__).resolve().parent.parent
-SCRIPTS_DIR = TAOSKG_ROOT / "skills" / "kg" / "scripts"
+LAMPKB_ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS_DIR = LAMPKB_ROOT / "skills" / "kg" / "scripts"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 # Upstream graphify checkout (used by Layer 1 equivalence tests only).
-UPSTREAM_DIR = TAOSKG_ROOT.parent / "graphify"
+UPSTREAM_DIR = LAMPKB_ROOT.parent / "graphify"
 
 
 @pytest.fixture

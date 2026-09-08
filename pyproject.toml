@@ -1,5 +1,5 @@
 [project]
-name = "taoskg"
+name = "lampkb"
 version = "0.1.0"
 description = "Documents-only knowledge-graph tool (kg skill + vendored kglib)"
 requires-python = ">=3.10"
