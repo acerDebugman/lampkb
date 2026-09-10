@@ -301,7 +301,7 @@ def to_json(G: nx.Graph, communities: dict[int, list[str]], output_path: str, *,
         data["built_at_commit"] = commit
     from kglib.paths import write_json_atomic
     # Atomic write: a crash/ENOSPC mid-write must not truncate a good graph.json.
-    write_json_atomic(output_path, data, indent=2)
+    write_json_atomic(output_path, data, indent=2, ensure_ascii=False)
     return True
 
 

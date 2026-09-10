@@ -105,6 +105,19 @@ def test_dedup_has_no_code_branch():
     assert not hasattr(dedup, "_is_code")
 
 
+def test_save_manifest_writes_literal_utf8_for_chinese_paths(tmp_path):
+    """manifest.json keys are corpus file paths — Chinese filenames must be
+    written as literal UTF-8, not \\uXXXX escapes."""
+    from kglib.detect import save_manifest
+    doc = tmp_path / "用户手册.md"
+    doc.write_text("# 手册", encoding="utf-8")
+    manifest_path = tmp_path / "kg-out" / "manifest.json"
+    save_manifest({"docs": [str(doc)]}, str(manifest_path), root=tmp_path)
+    raw = manifest_path.read_text(encoding="utf-8")
+    assert "\\u" not in raw
+    assert "用户手册.md" in raw
+
+
 def test_to_html_renders_entity_type_and_definition(tmp_path):
     import networkx as nx
     from kglib.export import to_html
@@ -120,6 +133,27 @@ def test_to_html_renders_entity_type_and_definition(tmp_path):
     assert "元素是 IDMP 中描述资产的基本单元。" in html
     assert "_entity_type" in html
     assert "_file_type" not in html
+
+
+def test_to_json_writes_literal_utf8_for_chinese_content(tmp_path):
+    """graph.json carries Chinese labels/relations/definitions — it must be
+    written as literal UTF-8 (readable, greppable), not \\uXXXX escapes."""
+    import networkx as nx
+    from kglib.export import to_json
+    G = nx.Graph()
+    G.add_node("n1", label="SMA", entity_type="concept",
+               definition="SMA（Simple Moving Average）= 过去 N 个周期终末值的算术平均值。",
+               source_file="a.md")
+    G.add_node("n2", label="均线", entity_type="concept", definition="",
+               source_file="a.md")
+    G.add_edge("n1", "n2", relation="归属", confidence="EXTRACTED",
+               source_file="a.md")
+    out = tmp_path / "graph.json"
+    assert to_json(G, {0: ["n1", "n2"]}, str(out), force=True)
+    raw = out.read_text(encoding="utf-8")
+    assert "\\u" not in raw
+    assert "算术平均值" in raw
+    assert "归属" in raw
 
 
 def test_extraction_docs_fixture_covers_full_taxonomy():
