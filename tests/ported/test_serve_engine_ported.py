@@ -39,8 +39,8 @@ def _make_graph() -> nx.Graph:
     G.add_node("n3", label="build", source_file="build.md", source_location="L1", community=1)
     G.add_node("n4", label="report", source_file="report.md", source_location="L1", community=1)
     G.add_node("n5", label="isolated", source_file="other.md", source_location="L1", community=2)
-    G.add_edge("n1", "n2", relation="references", confidence="INFERRED", context="call")
-    G.add_edge("n2", "n3", relation="cites", confidence="EXTRACTED", context="import")
+    G.add_edge("n1", "n2", relation="归属", confidence="INFERRED", context="call")
+    G.add_edge("n2", "n3", relation="阐述", confidence="EXTRACTED", context="import")
     G.add_edge("n3", "n4", relation="uses", confidence="EXTRACTED")
     return G
 
@@ -410,7 +410,7 @@ def test_subgraph_to_text_edge_included():
     G = _make_graph()
     text = _subgraph_to_text(G, {"n1", "n2"}, [("n1", "n2")])
     assert "EDGE" in text
-    assert "references" in text
+    assert "归属" in text
 
 
 def test_subgraph_to_text_includes_edge_context():

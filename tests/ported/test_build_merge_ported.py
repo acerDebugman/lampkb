@@ -19,7 +19,8 @@ def _node(i: int, sf: str) -> dict:
     return {
         "id": f"{stem}_n{i}",
         "label": f"{sf} node {i}",
-        "file_type": "document",
+        "entity_type": "document",
+        "definition": "",
         "source_file": sf,
         "source_location": f"L{i + 1}",
         "_origin": "ast",
@@ -118,9 +119,11 @@ def _seed_two_docs(tmp_path) -> Path:
         graph_path,
         nodes=[
             {"id": "foo_widget_cache", "label": "Widget Cache Design",
-             "file_type": "concept", "source_file": "docs/foo.md", "source_location": "L1"},
+             "entity_type": "concept", "definition": "",
+             "source_file": "docs/foo.md", "source_location": "L1"},
             {"id": "bar_other", "label": "Other",
-             "file_type": "concept", "source_file": "docs/bar.md", "source_location": "L1"},
+             "entity_type": "concept", "definition": "",
+             "source_file": "docs/bar.md", "source_location": "L1"},
         ],
         edges=[],
     )
@@ -133,7 +136,8 @@ def test_reextracted_file_in_prune_sources_is_not_deleted(tmp_path):
     graph_path = _seed_two_docs(tmp_path)
     new_chunk = {"nodes": [
         {"id": "foo_widget_cache", "label": "Widget Cache Design",
-         "file_type": "concept", "source_file": "docs/foo.md", "source_location": "L2"}
+         "entity_type": "concept", "definition": "",
+         "source_file": "docs/foo.md", "source_location": "L2"}
     ], "edges": []}
 
     G = build_merge([new_chunk], graph_path=str(graph_path),
@@ -148,7 +152,8 @@ def test_genuine_deletion_still_prunes(tmp_path):
     graph_path = _seed_two_docs(tmp_path)
     new_chunk = {"nodes": [
         {"id": "foo_widget_cache", "label": "Widget Cache Design",
-         "file_type": "concept", "source_file": "docs/foo.md", "source_location": "L2"}
+         "entity_type": "concept", "definition": "",
+         "source_file": "docs/foo.md", "source_location": "L2"}
     ], "edges": []}
     # bar.md genuinely deleted (not re-extracted)
     G = build_merge([new_chunk], graph_path=str(graph_path),

@@ -16,8 +16,8 @@ def _write_graph(tmp_path):
     G.add_node("n1", label="extract", source_file="extract.md", source_location="L10", community=0)
     G.add_node("n2", label="cluster", source_file="cluster.md", source_location="L5", community=0)
     G.add_node("n3", label="build", source_file="build.md", source_location="L1", community=1)
-    G.add_edge("n1", "n2", relation="references", confidence="EXTRACTED", context="call")
-    G.add_edge("n2", "n3", relation="cites", confidence="EXTRACTED", context="import")
+    G.add_edge("n1", "n2", relation="归属", confidence="EXTRACTED", context="call")
+    G.add_edge("n2", "n3", relation="阐述", confidence="EXTRACTED", context="import")
     graph_path = tmp_path / "graph.json"
     graph_path.write_text(json.dumps(json_graph.node_link_data(G, edges="links")))
     return graph_path
@@ -50,7 +50,7 @@ def _write_calls_graph(tmp_path):
     G = nx.Graph()
     G.add_node("caller", label="caller_doc", source_file="a.md", source_location="L1", community=0)
     G.add_node("callee", label="callee_doc", source_file="b.md", source_location="L1", community=1)
-    G.add_edge("caller", "callee", relation="references", confidence="EXTRACTED", context="call")
+    G.add_edge("caller", "callee", relation="归属", confidence="EXTRACTED", context="call")
     graph_path = tmp_path / "graph.json"
     graph_path.write_text(json.dumps(json_graph.node_link_data(G, edges="links")))
     return graph_path
@@ -64,8 +64,8 @@ def test_query_preserves_edge_direction_when_seeded_on_callee(tmp_path, capsys):
     rc = run_query("callee_doc", graph_path=str(graph_path))
     assert rc == 0
     out = capsys.readouterr().out
-    assert "caller_doc --references" in out
-    assert "callee_doc --references" not in out
+    assert "caller_doc --归属" in out
+    assert "callee_doc --归属" not in out
 
 
 def test_query_preserves_edge_direction_when_seeded_on_caller(tmp_path, capsys):
@@ -74,8 +74,8 @@ def test_query_preserves_edge_direction_when_seeded_on_caller(tmp_path, capsys):
     rc = run_query("caller_doc", graph_path=str(graph_path))
     assert rc == 0
     out = capsys.readouterr().out
-    assert "caller_doc --references" in out
-    assert "callee_doc --references" not in out
+    assert "caller_doc --归属" in out
+    assert "callee_doc --归属" not in out
 
 
 def test_query_rejects_oversized_graph(monkeypatch, tmp_path, capsys):
