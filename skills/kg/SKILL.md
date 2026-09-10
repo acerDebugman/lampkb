@@ -119,39 +119,51 @@ Output ONLY valid JSON matching the schema at the end - no explanation, no markd
 Files (batch CHUNK_NUM of TOTAL_CHUNKS):
 FILE_LIST
 
+Entity types: every node's `entity_type` MUST be one of exactly these nine
+English keys. Any other value is invalid and will be rejected.
+
+| entity_type | 中文 | 定义 | 判定规则 | 示例 |
+|---|---|---|---|---|
+| concept | 概念 | 有明确定义的术语/对象/抽象概念 | 文档的术语表章节，或在文档中反复出现的高频词 | 元素、属性、模板、面板、实时分析、事件、MCP |
+| principle | 原理 | 机理知识与底层逻辑 | 回答"为什么要这么做"的依据 | 液位与容积利用率是同一物理量的换算 |
+| method | 方法 | 一套可执行的做法/方案 | 有步骤、可复用、有名称 | 根因分析、面板解读、流式计算 |
+| rule | 规则 | 条件/前提/判断规则 | "必须/不能/仅当/依赖"类表述 | AI 功能需要有效的 AI 连接配置 |
+| procedure | 操作 | 多步骤的执行方案 | 包含先后顺序的动作设定 | 点击 AI 图标→选函数→查看结果 |
+| fact | 事实 | 客观数值/边界/默认值 | 数字、单位、上限、默认值 | 量程、限值、采样频率 |
+| scenario | 场景 | 业务场景的描述 | "用于……场景"类表述 | 质量分析、异常初筛、SPC 监控 |
+| keypoint | 要点 | 结论/关键论点 | 强调的总结性陈述 | 通用分析不创建资源；AI Function 会话独立 |
+| document | 文档 | 信息来源 | Document files 和章节 | IDMP 用户手册 8.11 |
+
+`definition` attribute (REQUIRED on every node):
+- Extract the entity's definition ONLY when the document defines it explicitly —
+  a glossary entry, or an "X 是指/是…" statement. Copy the source wording verbatim.
+- Otherwise set "definition": "". NEVER summarize, paraphrase, or invent a definition.
+
+Relations: every edge's `relation` MUST be one of exactly these eleven Chinese
+values. All relations are binary (source -> target). Any other value is invalid
+and will be rejected.
+
+| relation | 语义 | 典型问题 |
+|---|---|---|
+| 阐述 | 概念 > 依据/原理 | X 为什么是这样 |
+| 归属 | 子概念归属父概念 | X 属于 Y |
+| 组成 | 部分组成整体 | X 包括 Y/Z |
+| 前置 | 目标拥有前置条件 | 做 X 前需要满足 Y |
+| 解决 | 方法解决问题 | X 能解决 Y |
+| 导致 | 原因带来结果 | X 会带来 Y |
+| 限制 | 知识点拥有约束/边界 | X 有什么限制 |
+| 顺序 | 前一步>后一步，即包含顺序的多个步骤 | 步骤1>步骤2>步骤3 |
+| 推导 | 论据推导出论点 | 因为 X，所以 Y |
+| 适用 | 知识点使用的对象/场景 | X 适用于 Y |
+| 影响 | 知识点1 改变/波及 知识点2 | X 会影响 Y |
+
 Rules:
 - EXTRACTED: relationship explicit in source (citation, "see §3.2", named cross-reference)
 - INFERRED: reasonable inference (shared concept, implied dependency)
 - AMBIGUOUS: uncertain - flag for review, do not omit
 
-Doc/paper files: extract named concepts, entities, citations. For rationale (WHY decisions were
-  made, trade-offs, design intent): store as a `rationale` attribute on the relevant concept
-  node — do NOT create a separate rationale node or fragment node. Only create a node for
-  something that is itself a named entity or concept. Use `file_type:"rationale"` for
-  concept-like nodes (ideas, principles, mechanisms, design patterns). `file_type` MUST be
-  one of exactly these four values: `document`, `paper`, `rationale`, `concept`.
-  Any other value is invalid and will be rejected.
-
 DEEP_MODE (if --mode deep was given): be aggressive with INFERRED edges - indirect deps,
   shared assumptions, latent couplings. Mark uncertain ones AMBIGUOUS instead of omitting.
-
-Semantic similarity: if two concepts in this batch solve the same problem or represent the
-  same idea without any structural link (no citation, no cross-reference), add a
-  `semantically_similar_to` edge marked INFERRED with a confidence_score reflecting how
-  similar they are (0.6-0.95). Examples:
-- Two sections in different documents that describe the same mechanism in different words
-- A concept in a paper and a principle in a design doc that are the same idea
-- Two definitions of the same term that never reference each other
-Only add these when the similarity is genuinely non-obvious and cross-cutting. Do not add
-them for trivially similar things.
-
-Hyperedges: if 3 or more nodes clearly participate together in a shared concept, flow, or
-  pattern that is not captured by pairwise edges alone, add a hyperedge to a top-level
-  `hyperedges` array. Examples:
-- All concepts from a paper section that form one coherent idea
-- All principles that together make up a methodology
-Use sparingly — only when the group relationship adds information beyond the pairwise
-edges. Maximum 3 hyperedges per batch.
 
 If a file has YAML frontmatter (--- ... ---), copy source_url, captured_at, author,
   contributor onto every node from that file.
@@ -171,16 +183,18 @@ Node ID format: lowercase, only `[a-z0-9_]`, no dots or slashes. Format: `{stem}
   where stem is the **full root-relative path with the extension dropped**, every path
   segment kept and joined with `_` (each segment lowercased with non-alphanumeric chars
   replaced by `_`), and entity is the concept name similarly normalized. Use every
-  directory level, not just the immediate parent. Examples: `docs/v1/api/README.md` +
-  `Rate Limiting` → `docs_v1_api_readme_rate_limiting`; top-level file `notes.md` +
-  `CAP theorem` → `notes_cap_theorem`. CRITICAL: never append batch numbers, sequence
-  numbers, or any suffix to an ID. IDs must be deterministic from the label alone — the
-  same entity must always produce the same ID regardless of which batch processes it.
+  directory level, not just the immediate parent. Chinese labels: use a short English
+  slug for the entity part (元素 → element, 面板 → panel) and keep the Chinese text in
+  `label`. Examples: `docs/v1/api/README.md` + `Rate Limiting` →
+  `docs_v1_api_readme_rate_limiting`; top-level file `notes.md` + `CAP theorem` →
+  `notes_cap_theorem`. CRITICAL: never append batch numbers, sequence numbers, or any
+  suffix to an ID. IDs must be deterministic from the label alone — the same entity
+  must always produce the same ID regardless of which batch processes it.
 
 Generate the extraction JSON matching this schema exactly:
-{"nodes":[{"id":"docs_api_rate_limiting","label":"Human Readable Name","file_type":"document|paper|rationale|concept","source_file":"<FILE_LIST path verbatim>","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null}],"edges":[{"source":"node_id","target":"node_id","relation":"references|cites|conceptually_related_to|semantically_similar_to|rationale_for","confidence":"EXTRACTED|INFERRED|AMBIGUOUS","confidence_score":1.0,"source_file":"<FILE_LIST path verbatim>","source_location":null,"weight":1.0}],"hyperedges":[{"id":"snake_case_id","label":"Human Readable Label","nodes":["node_id1","node_id2","node_id3"],"relation":"participate_in|form","confidence":"EXTRACTED|INFERRED","confidence_score":0.75,"source_file":"<FILE_LIST path verbatim>"}],"input_tokens":0,"output_tokens":0}
+{"nodes":[{"id":"docs_manual_element","label":"元素","entity_type":"concept","definition":"元素是 IDMP 中描述资产的基本单元。","source_file":"<FILE_LIST path verbatim>","source_location":null,"source_url":null,"captured_at":null,"author":null,"contributor":null}],"edges":[{"source":"node_id","target":"node_id","relation":"阐述|归属|组成|前置|解决|导致|限制|顺序|推导|适用|影响","confidence":"EXTRACTED|INFERRED|AMBIGUOUS","confidence_score":1.0,"source_file":"<FILE_LIST path verbatim>","source_location":null,"weight":1.0}],"input_tokens":0,"output_tokens":0}
 
-source_file RULE (every node, edge, and hyperedge): set source_file to the path of the
+source_file RULE (every node and edge): set source_file to the path of the
   originating file EXACTLY as it appears in FILE_LIST — verbatim and absolute. Do NOT
   shorten to a basename, do NOT re-relativize, do NOT strip any directory prefix. Copy
   the FILE_LIST entry character-for-character. This keeps the full build and incremental
