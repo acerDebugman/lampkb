@@ -193,7 +193,7 @@ def generate(
     lines += ["", "## Surprising Connections (you probably didn't know these)"]
     if surprise_list:
         for s in surprise_list:
-            relation = s.get("relation", "related_to")
+            relation = s.get("relation", "关联")
             note = s.get("note", "")
             files = s.get("source_files", ["", ""])
             conf = s.get("confidence", "EXTRACTED")

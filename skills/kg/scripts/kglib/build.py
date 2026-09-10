@@ -1163,9 +1163,9 @@ def deduplicate_by_label(nodes: list[dict], edges: list[dict]) -> tuple[list[dic
     ``deduplicate_entities`` (imported and called in ``build``), which supersedes
     it. The previous "Called in build() automatically" note was never true. It
     also merges by label alone with no ``entity_type`` guard, so it must not be
-    enabled for code nodes: same-label symbols from different files/packages
-    (e.g. two ``Account`` types) would collapse into one — the cross-file
-    conflation ``deduplicate_entities`` deliberately avoids for code.
+    enabled blindly: same-label entities from different sources (e.g. two
+    ``Account`` mentions) would collapse into one — the conflation
+    ``deduplicate_entities`` deliberately avoids.
     """
     _CHUNK_SUFFIX = re.compile(r"_c\d+$")
     canonical: dict[str, dict] = {}  # norm_label -> surviving node

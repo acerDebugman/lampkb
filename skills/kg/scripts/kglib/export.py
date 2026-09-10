@@ -8,7 +8,6 @@ import html as _html
 import json
 import os
 import shutil
-import sys
 from datetime import date
 from pathlib import Path
 import networkx as nx
@@ -284,8 +283,8 @@ def to_json(G: nx.Graph, communities: dict[int, list[str]], output_path: str, *,
             conf = link.get("confidence", "EXTRACTED")
             link["confidence_score"] = _CONFIDENCE_SCORE_DEFAULTS.get(conf, 1.0)
         # Restore original edge direction. Undirected NetworkX storage may
-        # canonicalize endpoint order, flipping `calls` and other directional
-        # edges in graph.json. The build path stashes the true endpoints in
+        # canonicalize endpoint order, flipping directional edges in
+        # graph.json. The build path stashes the true endpoints in
         # _src/_tgt for exactly this purpose.
         true_src = link.pop("_src", None)
         true_tgt = link.pop("_tgt", None)
