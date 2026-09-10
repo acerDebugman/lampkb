@@ -202,38 +202,12 @@ def generate(
                 conf_tag = f"INFERRED {cscore:.2f}"
             else:
                 conf_tag = conf
-            sem_tag = " [semantically similar]" if relation == "semantically_similar_to" else ""
             lines += [
-                f"- `{s['source']}` --{relation}--> `{s['target']}`  [{conf_tag}]{sem_tag}",
+                f"- `{s['source']}` --{relation}--> `{s['target']}`  [{conf_tag}]",
                 f"  {files[0]} → {files[1]}" + (f"  _{note}_" if note else ""),
             ]
     else:
         lines.append("- None detected - all connections are within the same source files.")
-
-    # Circular imports surfaced from file-level dependency graph. Only meaningful
-    # for code — a documents-only corpus has no imports, so the section is pure
-    # noise there ("None detected" on every run). Emit it only when the graph
-    # actually contains code.
-    _has_code = any(
-        d.get("file_type") == "code" for _, d in G.nodes(data=True)
-    ) or any(
-        d.get("relation") in ("imports", "imports_from")
-        for *_e, d in G.edges(data=True)
-    )
-    if _has_code:
-        from .analyze import find_import_cycles
-        cycles = find_import_cycles(G)
-        lines += ["", "## Import Cycles"]
-        if cycles:
-            for c in cycles:
-                cycle = c.get("cycle", [])
-                length = c.get("length", len(cycle))
-                if not cycle:
-                    continue
-                cycle_path = " -> ".join(cycle + [cycle[0]])
-                lines.append(f"- {length}-file cycle: `{cycle_path}`")
-        else:
-            lines.append("- None detected.")
 
     lines += ["", f"## Communities ({len(communities)} total, {thin_count_summary} thin omitted)"]
     for cid, nodes in communities.items():
@@ -273,7 +247,6 @@ def generate(
         if G.degree(n) <= 1
         and not _is_file_node(G, n)
         and not _is_concept_node(G, n)
-        and G.nodes[n].get("file_type") != "rationale"
     ]
     thin_communities = {
         cid: nodes for cid, nodes in communities.items()

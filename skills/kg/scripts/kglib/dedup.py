@@ -128,7 +128,7 @@ def _same_word_variant(x: str, y: str) -> bool:
     """True when tokens x and y read as one word misspelt, not two words.
 
     A same-length pair within one substitution/transposition is a typo
-    ("manager"/"nanager") -- the same rationale _short_label_blocked applies
+    ("manager"/"nanager") -- the same reasoning _short_label_blocked applies
     to whole short labels, and unlike Jaro-Winkler it holds at position 0,
     where the prefix bonus gives no help (JW scores "manager"/"nanager" at
     84.92, below threshold, yet it is as much a typo as "managr"). Below 6
@@ -190,25 +190,25 @@ def _content_token_swap(a: str, b: str) -> bool:
     return False
 
 
-# file_type values whose identity is anchored to their source location, not
-# their label text. Like code, these must not be label-merged across
-# files: rationale = module/class docstrings, document = headings/positional
-# content. `concept` is intentionally excluded -- it is the type meant to unify
-# across files (protected from over-merge by the numeric/Jaro guards instead).
-_FILE_ANCHORED_NONCODE = frozenset({"rationale", "document"})
+# entity_type values whose identity is anchored to their source location, not
+# their label text. document nodes are file/section-derived and must not be
+# label-merged across files; the concept-like types are intentionally excluded
+# -- they are meant to unify across files (protected from over-merge by the
+# numeric/Jaro guards instead).
+_FILE_ANCHORED_NONCODE = frozenset({"document"})
 
 
 def _crossfile_fileanchored_blocked(node: dict, neighbor: dict) -> bool:
     """Block label-based merging of file-anchored non-code nodes across files.
 
-    rationale/document nodes are docstring- and heading-derived and as
+    document nodes are file/section-derived and as
     file-anchored as the code they describe (the same reasoning, one layer up):
     parallel modules carry near-identical boilerplate ("Django app config for
     apps.<name>. No business logic here...") that differs by one word and sails
     past the JW threshold. Same-file duplicates of these types may still merge.
     """
-    if (node.get("file_type") not in _FILE_ANCHORED_NONCODE
-            and neighbor.get("file_type") not in _FILE_ANCHORED_NONCODE):
+    if (node.get("entity_type") not in _FILE_ANCHORED_NONCODE
+            and neighbor.get("entity_type") not in _FILE_ANCHORED_NONCODE):
         return False
     return (node.get("source_file") or "") != (neighbor.get("source_file") or "")
 
@@ -248,20 +248,6 @@ _MERGE_THRESHOLD = 92.0     # rapidfuzz normalized_similarity * 100
 _COMMUNITY_BOOST = 5.0      # score bonus when both nodes share community
 _NUM_PERM = 128
 _CHUNK_SUFFIX = re.compile(r"_c\d+$")
-
-
-def _is_code(node: dict) -> bool:
-    """True for AST-extracted code symbols.
-
-    Code-node identity is the node ID (which already encodes the fully
-    qualified path: module/class/symbol). The label is only a display name
-    (e.g. a bare ``.draw()`` method name, or a function name shared by two
-    parallel backends), so label-based merging conflates distinct symbols.
-    Genuine duplicates — the same symbol re-extracted — share an ID
-    and are already collapsed by the exact-ID ``seen_ids`` pre-dedup above,
-    so code never needs label-based merging.
-    """
-    return node.get("file_type") == "code"
 
 
 # ── ID collisions ─────────────────────────────────────────────────────────────
@@ -554,10 +540,6 @@ def deduplicate_entities(
     # ── pass 1: exact normalization ───────────────────────────────────────────
     norm_to_nodes: dict[str, list[dict]] = defaultdict(list)
     for node in unique_nodes:
-        # Code symbols are keyed by ID, never by label — skip them entirely so
-        # distinct same-named symbols are never merged by string similarity.
-        if _is_code(node):
-            continue
         key = _norm(node.get("label", node.get("id", "")))
         if key:
             norm_to_nodes[key].append(node)
@@ -586,15 +568,13 @@ def deduplicate_entities(
                     uf.union(winner["id"], node["id"])
                 exact_merges += len(file_group) - 1
         # Cross-file residue: union exact matches across files, but only where
-        # it is provably safe. `concept` is the one file_type meant to
-        # unify across files — code is keyed by ID, rationale/
-        # document are file-anchored, and image/paper labels are often
-        # shared basenames (logo.png). Provenance is required, and the
-        # entropy gate mirrors Pass 2 so short generic labels ("API") stay
-        # distinct. Sorting by id keeps the winner order-independent.
+        # it is provably safe. The concept-like entity types are the ones meant to
+        # unify across files — document is file-anchored. Provenance is required,
+        # and the entropy gate mirrors Pass 2 so short generic labels ("API")
+        # stay distinct. Sorting by id keeps the winner order-independent.
         mergeable = sorted(
             (n for n in group
-             if n.get("file_type") == "concept"
+             if n.get("entity_type") == "concept"
              and (n.get("source_file") or "")
              and _entropy(n.get("label", "")) >= _ENTROPY_THRESHOLD),
             key=lambda n: n["id"],
@@ -610,12 +590,6 @@ def deduplicate_entities(
     candidates: list[dict] = []
     seen_norms: set[str] = set()
     for node in unique_nodes:
-        # Code symbols are excluded from fuzzy matching too: two functions with
-        # similar long names in different files (parallel backends, sibling
-        # classes) must not be fuzzy-merged, and a code↔concept fuzzy match must
-        # not transitively union two distinct code symbols via a concept.
-        if _is_code(node):
-            continue
         key = _norm(node.get("label", node.get("id", "")))
         if key and key not in seen_norms:
             seen_norms.add(key)
@@ -686,7 +660,7 @@ def deduplicate_entities(
                 if _hi.startswith(_lo) and _hi != _lo:
                     continue
                 # Numbered/versioned siblings and cross-file file-anchored
-                # boilerplate (rationale/document) are decisively distinct
+                # boilerplate (document) are decisively distinct
                 # regardless of score.
                 if _numeric_tokens_differ(norm_label, neighbor_norm):
                     continue
@@ -711,9 +685,7 @@ def deduplicate_entities(
                     # never share a normalized label and this branch is
                     # unreachable today. Retained in case candidate selection
                     # changes. Equal-norm cross-file pairs are handled in Pass 1
-                    # instead, gated to `concept` nodes — the original
-                    # rationale (same-named code symbols) was obsoleted by code
-                    # being excluded from label matching entirely.
+                    # instead, gated to `concept` nodes.
                     if norm_label == neighbor_norm:
                         sf_a = node.get("source_file") or ""
                         sf_b = neighbor.get("source_file") or ""

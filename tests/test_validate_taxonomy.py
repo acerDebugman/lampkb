@@ -87,3 +87,19 @@ def test_confidence_enum_unchanged():
 def test_assert_valid_raises_with_all_errors():
     with pytest.raises(ValueError, match="error"):
         assert_valid({"nodes": [_node(entity_type="image")], "edges": []})
+
+
+def test_dedup_file_anchored_set_contains_only_document():
+    from kglib.dedup import _FILE_ANCHORED_NONCODE
+    assert _FILE_ANCHORED_NONCODE == frozenset({"document"})
+
+
+def test_analyze_has_no_legacy_relation_special_cases():
+    import kglib.analyze as analyze
+    assert not hasattr(analyze, "find_import_cycles")
+    assert not hasattr(analyze, "_cross_language")
+
+
+def test_dedup_has_no_code_branch():
+    import kglib.dedup as dedup
+    assert not hasattr(dedup, "_is_code")
