@@ -53,35 +53,6 @@ def _is_ast_tier(item: dict) -> bool:
     return isinstance(loc, str) and bool(_AST_LOC_RE.match(loc))
 
 
-# Relations that say only "these two symbols appear together", with no claim about
-# HOW. An extractor that finds a specific fact for a pair — a call, an import, an
-# inheritance — routinely emits one of these for the same pair as well, so when the
-# simple graph collapses the pair to one edge, the generic one must never be the
-# survivor. Deliberately a small denylist rather than a full precedence order over
-# every relation: ranking `contains` against `calls` would be inventing a
-# cross-axis judgement, whereas "specific beats generic" is the only comparison
-# this collapse actually needs.
-_GENERIC_RELATIONS: frozenset[str] = frozenset({"references", "uses", "mentions"})
-
-# Language interop families, keyed by extension, for the cross-language phantom-edge
-# guard in the edge loop below. Families group by REAL interop (JS/TS share a module
-# graph; C/C++/ObjC share a compilation unit via headers; JVM langs share bytecode),
-# so a legitimate TS->JS import or C impl->header call survives, while a Python
-# `import time` binding to a `time.ts` or a cross-language INFERRED `calls`
-# edge is dropped. Kept local to build.py (not imported from extract.py,
-# which imports build.py — a cycle) and deliberately mirrors extract._LANG_FAMILY_BY_EXT.
-_EDGE_LANG_FAMILY: dict[str, str] = {
-    ".py": "py", ".pyi": "py",
-    ".js": "js", ".mjs": "js", ".cjs": "js", ".jsx": "js",
-    ".ts": "js", ".tsx": "js", ".mts": "js", ".cts": "js",
-    ".go": "go", ".rs": "rs",
-    ".java": "jvm", ".kt": "jvm", ".scala": "jvm", ".groovy": "jvm",
-    ".c": "c", ".h": "c", ".cc": "c", ".cpp": "c", ".hpp": "c",
-    ".cxx": "c", ".hh": "c", ".hxx": "c",
-    ".cu": "c", ".cuh": "c", ".metal": "c", ".m": "c", ".mm": "c",
-    ".rb": "rb", ".rake": "rb", ".php": "php", ".cs": "cs", ".swift": "swift", ".lua": "lua",
-}
-
 
 # Synonym mapper for entity_type drift. The extraction prompt's type table
 # prints Chinese names next to the English keys, so the common drift is emitting
@@ -1220,41 +1191,6 @@ def build_from_json(extraction: dict, *, directed: bool = False, root: str | Pat
             )
         if "source_file" in attrs:
             attrs["source_file"] = _norm_source_file(attrs["source_file"], _root)
-        # Drop cross-language phantom edges — the same short names (render, parse,
-        # time, ...) recur across language boundaries, so an unresolved target can
-        # bind to a same-named node in another language. The extraction spec forbids
-        # this for `calls`; it is equally invalid for `imports`/`references` (a
-        # Python `import time` must not bind to a `time.ts`).
-        _edge_rel = attrs.get("relation")
-        if _edge_rel in ("calls", "imports", "imports_from", "references"):
-            src_ext = Path(G.nodes[src].get("source_file") or "").suffix.lower()
-            tgt_ext = Path(G.nodes[tgt].get("source_file") or "").suffix.lower()
-            src_fam = _EDGE_LANG_FAMILY.get(src_ext)
-            tgt_fam = _EDGE_LANG_FAMILY.get(tgt_ext)
-            if _edge_rel == "calls":
-                # Unchanged cross-language behavior: only INFERRED calls, and drop as
-                # soon as either family differs (an unknown ext counts as different).
-                if (
-                    attrs.get("confidence") == "INFERRED"
-                    and src_ext and tgt_ext and src_fam != tgt_fam
-                ):
-                    continue
-            else:
-                # imports/references: drop only when BOTH endpoints are known code
-                # languages of different families, so a config->code reference
-                # (unknown ext, e.g. a manifest) is never mistaken for a phantom.
-                if src_fam is not None and tgt_fam is not None and src_fam != tgt_fam:
-                    continue
-        # A file-level import or re-export cannot carry useful connectivity when
-        # both endpoints resolve to the same node.  This most often happens when
-        # the target is an unresolved bare module name (``builtins``, ``poseidon``)
-        # that the legacy-ID alias index above mistakes for the importing file's
-        # own old stem.  It also covers a nested module importing its parent file:
-        # at file-node granularity that relationship necessarily collapses.  Keep
-        # other self-edges, notably recursive ``calls``, because those are real
-        # program structure rather than import-resolution artifacts.
-        if src == tgt and _edge_rel in ("imports", "imports_from", "re_exports"):
-            continue
         # Preserve original edge direction - undirected graphs lose it otherwise,
         # causing display functions to show edges backwards.
         attrs["_src"] = src
@@ -1270,25 +1206,6 @@ def build_from_json(extraction: dict, *, directed: bool = False, root: str | Pat
             existing = edge_data(G, src, tgt)
             if existing.get("relation") == attrs.get("relation") and (
                 existing.get("_src") == tgt and existing.get("_tgt") == src
-            ):
-                continue
-        # A pair that already carries a SPECIFIC relation must not be downgraded
-        # to a generic one. Only one edge survives per pair here, and the sort
-        # above orders same-pair edges by relation name, so "last write wins"
-        # resolved the winner alphabetically — which put `references` after
-        # `calls` and `uses` after everything. On graphify's own corpus that
-        # rewrote all 144 pairs where the extraction found both `calls` and
-        # `references` into plain `references`, and callflow's relation filter
-        # does not include `references`, so those call sites left the call graph
-        # entirely. Alphabetical order carries no meaning; keeping the specific
-        # fact does. The reverse (specific arriving after generic) still
-        # overwrites, so the outcome no longer depends on edge order at all.
-        if G.has_edge(src, tgt):
-            existing_rel = edge_data(G, src, tgt).get("relation")
-            if (
-                attrs.get("relation") in _GENERIC_RELATIONS
-                and existing_rel is not None
-                and existing_rel not in _GENERIC_RELATIONS
             ):
                 continue
         G.add_edge(src, tgt, **attrs)
