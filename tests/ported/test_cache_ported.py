@@ -106,15 +106,11 @@ def test_save_semantic_cache_rejects_out_of_scope_source_file(tmp_path):
     edges = [
         {"source": "stray", "target": "expected", "source_file": "protected.md"},
     ]
-    hyperedges = [
-        {"id": "stray_hyperedge", "nodes": ["stray"], "source_file": "protected.md"},
-    ]
 
     with pytest.warns(RuntimeWarning, match="out-of-scope source_file 'protected.md'"):
         saved = save_semantic_cache(
             nodes,
             edges,
-            hyperedges,
             root=tmp_path,
             allowed_source_files=["intended.md"],
             cache_root=tmp_path,
@@ -127,7 +123,6 @@ def test_save_semantic_cache_rejects_out_of_scope_source_file(tmp_path):
     protected_cache = load_cached(protected, root=tmp_path, kind="semantic", cache_root=tmp_path)
     assert {node["id"] for node in protected_cache["nodes"]} == {"original"}
     assert protected_cache["edges"] == []
-    assert protected_cache["hyperedges"] == []
 
 
 def test_semantic_cache_check_returns_uncached(tmp_path):
@@ -136,10 +131,10 @@ def test_semantic_cache_check_returns_uncached(tmp_path):
     f = tmp_path / "doc.md"
     f.write_text("# Doc\n")
     save_semantic_cache([{"id": "a", "source_file": "doc.md"}], [], root=tmp_path, cache_root=tmp_path)
-    cached_nodes, cached_edges, cached_hyperedges, uncached = check_semantic_cache(
+    cached_nodes, cached_edges, uncached = check_semantic_cache(
         [str(f)], root=tmp_path, cache_root=tmp_path)
     assert uncached == []
     assert {n["id"] for n in cached_nodes} == {"a"}
     f.write_text("# Doc v2 - changed body\n")
-    _n, _e, _h, uncached = check_semantic_cache([str(f)], root=tmp_path)
+    _n, _e, uncached = check_semantic_cache([str(f)], root=tmp_path)
     assert uncached == [str(f)]

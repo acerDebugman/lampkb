@@ -235,16 +235,6 @@ def generate(
         else:
             lines.append("- None detected.")
 
-    hyperedges = G.graph.get("hyperedges", [])
-    if hyperedges:
-        lines += ["", "## Hyperedges (group relationships)"]
-        for h in hyperedges:
-            node_labels = ", ".join(h.get("nodes", []))
-            conf = h.get("confidence", "INFERRED")
-            cscore = h.get("confidence_score")
-            conf_tag = f"{conf} {cscore:.2f}" if cscore is not None else conf
-            lines.append(f"- **{h.get('label', h.get('id', ''))}** — {node_labels} [{conf_tag}]")
-
     lines += ["", f"## Communities ({len(communities)} total, {thin_count_summary} thin omitted)"]
     for cid, nodes in communities.items():
         label = community_labels.get(cid, f"Community {cid}")

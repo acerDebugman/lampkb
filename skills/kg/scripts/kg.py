@@ -106,13 +106,13 @@ def _cache_check_and_batch(files_by_type: dict, root: Path) -> tuple[int, list[s
 
     out = _out()
     all_files = [f for cat in _SEM_TYPES for f in files_by_type.get(cat, [])]
-    cached_nodes, cached_edges, cached_hyperedges, uncached = check_semantic_cache(all_files, root=root)
+    cached_nodes, cached_edges, uncached = check_semantic_cache(all_files, root=root)
 
     # Always (re)write the cache file: write hits, else DELETE any leftover from a prior
     # run so the merge never picks up a stale .kg_cached.json.
-    if cached_nodes or cached_edges or cached_hyperedges:
+    if cached_nodes or cached_edges:
         _write_json(out / ".kg_cached.json",
-                    {"nodes": cached_nodes, "edges": cached_edges, "hyperedges": cached_hyperedges})
+                    {"nodes": cached_nodes, "edges": cached_edges})
     else:
         (out / ".kg_cached.json").unlink(missing_ok=True)
     write_text_atomic(out / ".kg_uncached.txt", "\n".join(uncached))
@@ -157,7 +157,6 @@ def cmd_merge_extraction(args) -> int:
     chunks = sorted(out.glob(".kg_chunk_*.json"))
     all_nodes: list[dict] = []
     all_edges: list[dict] = []
-    all_hyperedges: list[dict] = []
     valid = 0
     for c in chunks:
         try:
@@ -170,11 +169,10 @@ def cmd_merge_extraction(args) -> int:
             continue
         all_nodes += d.get("nodes", [])
         all_edges += d.get("edges", [])
-        all_hyperedges += d.get("hyperedges", [])
         valid += 1
     # Self-extraction has no per-batch token metering — token counts stay 0.
     new = {
-        "nodes": all_nodes, "edges": all_edges, "hyperedges": all_hyperedges,
+        "nodes": all_nodes, "edges": all_edges,
         "input_tokens": 0, "output_tokens": 0,
     }
     _write_json(out / ".kg_semantic_new.json", new, indent=2)
@@ -184,16 +182,15 @@ def cmd_merge_extraction(args) -> int:
     uncached_path = out / ".kg_uncached.txt"
     uncached = [line for line in uncached_path.read_text(encoding="utf-8").splitlines() if line] \
         if uncached_path.exists() else []
-    saved = save_semantic_cache(new["nodes"], new["edges"], new["hyperedges"],
-                                root=root, allowed_source_files=uncached)
+    saved = save_semantic_cache(new["nodes"], new["edges"], root=root,
+                                allowed_source_files=uncached)
     print(f"Cached {saved} files", file=sys.stderr)
 
     # Merge cached + new results into kg-out/.kg_semantic.json.
     cached_path = out / ".kg_cached.json"
-    cached = _read_json(cached_path) if cached_path.exists() else {"nodes": [], "edges": [], "hyperedges": []}
+    cached = _read_json(cached_path) if cached_path.exists() else {"nodes": [], "edges": []}
     merged_nodes = cached["nodes"] + new["nodes"]
     merged_edges = cached["edges"] + new["edges"]
-    merged_hyperedges = cached.get("hyperedges", []) + new["hyperedges"]
     seen: set = set()
     deduped: list[dict] = []
     for n in merged_nodes:
@@ -203,7 +200,6 @@ def cmd_merge_extraction(args) -> int:
     merged = {
         "nodes": deduped,
         "edges": merged_edges,
-        "hyperedges": merged_hyperedges,
         "input_tokens": 0,
         "output_tokens": 0,
     }
@@ -220,8 +216,7 @@ def cmd_merge_extraction(args) -> int:
     # the extraction (there is no AST pass to merge).
     shutil.copyfile(out / ".kg_semantic.json", out / ".kg_extract.json")
     d = _read_json(out / ".kg_extract.json")
-    print(f"Extraction: {len(d['nodes'])} nodes, {len(d['edges'])} edges, "
-          f"{len(d.get('hyperedges', []))} hyperedges")
+    print(f"Extraction: {len(d['nodes'])} nodes, {len(d['edges'])} edges")
     return 0
 
 
@@ -607,7 +602,7 @@ def cmd_update_detect(args) -> int:
         extract_path = out / ".kg_extract.json"
         if not extract_path.exists():
             print("[kg update] Only deletions -- creating empty extraction for merge.")
-            _write_json(extract_path, {"nodes": [], "edges": [], "hyperedges": [],
+            _write_json(extract_path, {"nodes": [], "edges": [],
                                        "input_tokens": 0, "output_tokens": 0})
     else:
         # Cache-check the CHANGED document/paper subset and write fresh
@@ -667,7 +662,6 @@ def cmd_update_merge(args) -> int:
              "source": d.get("_src", u), "target": d.get("_tgt", v)}
             for u, v, d in G.edges(data=True)
         ],
-        "hyperedges": list(G.graph.get("hyperedges", [])),
         "input_tokens": new_extraction.get("input_tokens", 0),
         "output_tokens": new_extraction.get("output_tokens", 0),
     }

@@ -137,23 +137,6 @@ def _strip_diacritics(text: str | None) -> str:
 _CONFIDENCE_SCORE_DEFAULTS = {"EXTRACTED": 1.0, "INFERRED": 0.5, "AMBIGUOUS": 0.2}
 
 
-def attach_hyperedges(G: nx.Graph, hyperedges: list) -> None:
-    """Store hyperedges in the graph's metadata dict."""
-    existing = G.graph.get("hyperedges", [])
-    # Skip id-less persisted entries when seeding the dedup set: the
-    # semantic extractor emits hyperedges with no `id` and build.py persists them
-    # verbatim, so a prior graph.json can contain id-less hyperedges. A hard
-    # `h["id"]` here raised `KeyError: 'id'` on every incremental re-extract,
-    # symmetric with the `.get("id")` guard the loop below already applies to the
-    # incoming set.
-    seen_ids = {h["id"] for h in existing if h.get("id")}
-    for h in hyperedges:
-        if h.get("id") and h["id"] not in seen_ids:
-            existing.append(h)
-            seen_ids.add(h["id"])
-    G.graph["hyperedges"] = existing
-
-
 def _git_head(cwd: "str | Path | None" = None) -> str | None:
     """Return git HEAD for the repo containing ``cwd``, or None outside a repo.
 
@@ -311,38 +294,6 @@ def to_json(G: nx.Graph, communities: dict[int, list[str]], output_path: str, *,
             link["target"] = true_tgt
     data["nodes"].sort(key=_json_sort_key)
     data["links"].sort(key=_json_sort_key)
-    if "hyperedges" not in getattr(G, "graph", {}):
-        # Hardening: a graph with NO hyperedges key at all was built by
-        # a path that never engaged hyperedge metadata — distinct from an
-        # intentional empty set ([], which build_from_json now stores
-        # explicitly after a full-wipeout revalidation). If the file on disk
-        # already holds a non-empty set, emptying it without a trace is silent
-        # data loss; warn loudly so the wipeout is attributable. We still write
-        # the graph's truth rather than preserving the stale set — resurrecting
-        # hyperedges whose members may no longer exist would reintroduce the
-        # dangling-member shape we removed.
-        _prev_hyperedges = None
-        try:
-            if existing_path.exists():
-                from kglib.security import check_graph_file_size_cap
-                check_graph_file_size_cap(existing_path)
-                _prev = json.loads(existing_path.read_text(encoding="utf-8"))
-                if isinstance(_prev, dict):
-                    _prev_hyperedges = _prev.get("hyperedges")
-        except Exception:
-            _prev_hyperedges = None
-        if _prev_hyperedges:
-            print(
-                f"[kg] WARNING: graph carries no hyperedge metadata but "
-                f"{existing_path} already holds {len(_prev_hyperedges)} "
-                f"hyperedge(s); writing an empty set. Rebuild from the original "
-                f"extraction if this is unexpected.",
-                file=sys.stderr,
-            )
-    hyperedges = sorted(getattr(G, "graph", {}).get("hyperedges", []), key=_json_sort_key)
-    if isinstance(data.get("graph"), dict) and "hyperedges" in data["graph"]:
-        data["graph"]["hyperedges"] = hyperedges
-    data["hyperedges"] = hyperedges
     # Fallback provenance comes from the repo the graph is being written INTO
     # (output_path lives in <target>/kg-out/), never the shell's cwd —
     # the same cwd-anchoring mistake fixed for `update`.
@@ -432,74 +383,6 @@ def _html_styles() -> str:
   #select-all-cb:indeterminate { background: #4E79A7; border-color: #4E79A7; }
   #select-all-cb:indeterminate::after { content: ''; position: absolute; left: 2px; top: 5px; width: 8px; height: 2px; background: #fff; border: none; transform: none; }
 </style>"""
-
-
-def _hyperedge_script(hyperedges_json: str) -> str:
-    return f"""<script>
-// Render hyperedges as shaded regions
-const hyperedges = {hyperedges_json};
-// afterDrawing passes ctx already transformed to network coordinate space.
-// Draw node positions raw — no manual pan/zoom/DPR math needed.
-
-// Andrew's monotone chain. Returns the hull in counter-clockwise order, which
-// is what the perimeter must be traced in. Collinear and duplicate points
-// collapse to the extremes, so degenerate member sets render as a segment
-// rather than a zero-area crossed path.
-function convexHull(pts) {{
-    const p = pts.slice().sort((a, b) => (a.x - b.x) || (a.y - b.y));
-    if (p.length < 3) return p;
-    const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
-    const build = seq => {{
-        const out = [];
-        for (const q of seq) {{
-            while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], q) <= 0) out.pop();
-            out.push(q);
-        }};
-        out.pop();
-        return out;
-    }};
-    const hull = build(p).concat(build(p.slice().reverse()));
-    return hull.length >= 3 ? hull : p;
-}}
-network.on('afterDrawing', function(ctx) {{
-    hyperedges.forEach(h => {{
-        const positions = h.nodes
-            .map(nid => network.getPositions([nid])[nid])
-            .filter(p => p !== undefined);
-        if (positions.length < 2) return;
-        ctx.save();
-        ctx.globalAlpha = 0.12;
-        ctx.fillStyle = '#6366f1';
-        ctx.strokeStyle = '#6366f1';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        // Centroid and expanded hull in network coordinates.
-        // The perimeter must follow hull order, not h.nodes order: tracing the
-        // raw member order self-intersects whenever the layout does not happen
-        // to place members in angular order, filling as crossed wedges.
-        const cx = positions.reduce((s, p) => s + p.x, 0) / positions.length;
-        const cy = positions.reduce((s, p) => s + p.y, 0) / positions.length;
-        const hull = convexHull(positions);
-        const expanded = hull.map(p => ({{
-            x: cx + (p.x - cx) * 1.15,
-            y: cy + (p.y - cy) * 1.15
-        }}));
-        ctx.moveTo(expanded[0].x, expanded[0].y);
-        expanded.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
-        ctx.closePath();
-        ctx.fill();
-        ctx.globalAlpha = 0.4;
-        ctx.stroke();
-        // Label
-        ctx.globalAlpha = 0.8;
-        ctx.fillStyle = '#4f46e5';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(h.label, cx, cy - 5);
-        ctx.restore();
-    }});
-}});
-</script>"""
 
 
 def _html_script(nodes_json: str, edges_json: str, legend_json: str) -> str:
@@ -804,30 +687,6 @@ def to_html(
                 return
             meta_communities = {cid: [str(cid)] for cid in communities}
             mc = {cid: len(members) for cid, members in communities.items()}
-            # Remap hyperedges from semantic node IDs to community IDs
-            raw_hyperedges = G.graph.get("hyperedges", [])
-            if raw_hyperedges:
-                remapped = []
-                for he in raw_hyperedges:
-                    he_members = he.get("nodes", [])
-                    comm_ids, seen = [], set()
-                    for nid in he_members:
-                        c = node_to_community.get(nid)
-                        if c is None:
-                            continue
-                        s = str(c)
-                        if s in seen:
-                            continue
-                        seen.add(s)
-                        comm_ids.append(s)
-                    if len(comm_ids) < 2:
-                        continue
-                    remapped.append({
-                        "id": he.get("id", ""),
-                        "label": he.get("label") or he.get("relation", "").replace("_", " "),
-                        "nodes": comm_ids,
-                    })
-                meta.graph["hyperedges"] = remapped
             to_html(meta, meta_communities, output_path,
                     community_labels=community_labels, member_counts=mc)
             print(f"graph.html written (aggregated: {meta.number_of_nodes()} community nodes, {meta.number_of_edges()} cross-community edges)")
@@ -954,7 +813,6 @@ def to_html(
     nodes_json = _js_safe(vis_nodes)
     edges_json = _js_safe(vis_edges)
     legend_json = _js_safe(legend_data)
-    hyperedges_json = _js_safe(getattr(G, "graph", {}).get("hyperedges", []))
     title = _html.escape(sanitize_label(_html_document_title(output_path)))
     stats = f"{G.number_of_nodes()} nodes &middot; {G.number_of_edges()} edges &middot; {len(communities)} communities"
 
@@ -987,7 +845,6 @@ def to_html(
   <div id="stats">{stats}</div>
 </div>
 {_html_script(nodes_json, edges_json, legend_json)}
-{_hyperedge_script(hyperedges_json)}
 </body>
 </html>"""
 
