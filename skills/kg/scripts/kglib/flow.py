@@ -371,7 +371,7 @@ def run_explain(label: str, *, graph_path: str | None = None) -> int:
     print(
         f"  Source:    {d.get('source_file', '')} {d.get('source_location', '')}".rstrip()
     )
-    print(f"  Type:      {d.get('file_type', '')}")
+    print(f"  Type:      {d.get('entity_type', '')}")
     print(f"  Community: {d.get('community_name') or d.get('community', '')}")
     # Work-memory overlay: a derived experiential hint from `kg reflect`,
     # merged in display-only from the .kg_learning.json sidecar next to

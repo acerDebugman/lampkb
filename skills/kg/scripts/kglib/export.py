@@ -401,7 +401,7 @@ const nodesDS = new vis.DataSet(RAW_NODES.map(n => ({{
   id: n.id, label: n.label, color: n.color, size: n.size,
   font: n.font, title: n.title,
   _community: n.community, _community_name: n.community_name,
-  _source_file: n.source_file, _file_type: n.file_type, _degree: n.degree,
+  _source_file: n.source_file, _entity_type: n.entity_type, _definition: n.definition, _degree: n.degree,
 }})));
 
 const edgesDS = new vis.DataSet(RAW_EDGES.map((e, i) => ({{
@@ -455,9 +455,10 @@ function showInfo(nodeId) {{
   }}).join('');
   document.getElementById('info-content').innerHTML = `
     <div class="field"><b>${{esc(n.label)}}</b></div>
-    <div class="field">Type: ${{esc(n._file_type || 'unknown')}}</div>
+    <div class="field">Type: ${{esc(n._entity_type || 'unknown')}}</div>
     <div class="field">Community: ${{esc(n._community_name)}}</div>
     <div class="field">Source: ${{esc(n._source_file || '-')}}</div>
+    ${{n._definition ? `<div class="field" style="margin-top:4px;color:#ddd;font-size:12px;white-space:pre-wrap">${{esc(n._definition)}}</div>` : ''}}
     <div class="field">Degree: ${{n._degree}}</div>
     ${{neighborIds.length ? `<div class="field" style="margin-top:8px;color:#aaa;font-size:11px">Neighbors (${{neighborIds.length}})</div><div id="neighbors-list">${{neighborItems}}</div>` : ''}}
   `;
@@ -742,7 +743,8 @@ def to_html(
             "community": cid,
             "community_name": sanitize_label((community_labels or {}).get(cid, f"Community {cid}")),
             "source_file": sanitize_label(str(data.get("source_file") or "")),
-            "file_type": data.get("file_type", ""),
+            "entity_type": data.get("entity_type", ""),
+            "definition": sanitize_label(str(data.get("definition") or "")),
             "degree": deg,
         }
         # Conditional learning fields — only present for annotated nodes, so
@@ -780,7 +782,7 @@ def to_html(
     # Build edges list. Restore original edge direction from _src/_tgt
     # (stashed by build.py for exactly this reason): undirected NetworkX
     # canonicalizes endpoint order, which would otherwise flip the arrow
-    # for `calls` and `rationale_for` in the rendered graph.
+    # of directed relations in the rendered graph.
     vis_edges = []
     for u, v, data in G.edges(data=True):
         confidence = data.get("confidence", "EXTRACTED")
@@ -808,7 +810,7 @@ def to_html(
 
     # Escape </script> sequences so embedded JSON cannot break out of the script tag
     def _js_safe(obj) -> str:
-        return json.dumps(obj).replace("</", "<\\/")
+        return json.dumps(obj, ensure_ascii=False).replace("</", "<\\/")
 
     nodes_json = _js_safe(vis_nodes)
     edges_json = _js_safe(vis_edges)

@@ -103,3 +103,20 @@ def test_analyze_has_no_legacy_relation_special_cases():
 def test_dedup_has_no_code_branch():
     import kglib.dedup as dedup
     assert not hasattr(dedup, "_is_code")
+
+
+def test_to_html_renders_entity_type_and_definition(tmp_path):
+    import networkx as nx
+    from kglib.export import to_html
+    G = nx.Graph()
+    G.add_node("n1", label="元素", entity_type="concept",
+               definition="元素是 IDMP 中描述资产的基本单元。",
+               source_file="a.md", community=0)
+    G.add_node("n2", label="规则X", entity_type="rule", definition="",
+               source_file="a.md", community=0)
+    out = tmp_path / "graph.html"
+    to_html(G, {0: ["n1", "n2"]}, str(out))
+    html = out.read_text(encoding="utf-8")
+    assert "元素是 IDMP 中描述资产的基本单元。" in html
+    assert "_entity_type" in html
+    assert "_file_type" not in html
