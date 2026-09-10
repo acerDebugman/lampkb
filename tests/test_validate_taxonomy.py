@@ -120,3 +120,19 @@ def test_to_html_renders_entity_type_and_definition(tmp_path):
     assert "元素是 IDMP 中描述资产的基本单元。" in html
     assert "_entity_type" in html
     assert "_file_type" not in html
+
+
+def test_extraction_docs_fixture_covers_full_taxonomy():
+    import json
+    from pathlib import Path
+    fixture = json.loads((Path(__file__).parent / "fixtures" / "extraction_docs.json")
+                         .read_text(encoding="utf-8"))
+    assert validate_extraction(fixture) == []
+    assert "hyperedges" not in fixture
+    assert {n["entity_type"] for n in fixture["nodes"]} == VALID_ENTITY_TYPES
+    assert {e["relation"] for e in fixture["edges"]} == VALID_RELATIONS
+    assert all("definition" in n for n in fixture["nodes"])
+    assert any(n["definition"] == "" for n in fixture["nodes"])
+    assert any(n["definition"] for n in fixture["nodes"])
+    assert len(fixture["nodes"]) == 18
+    assert len(fixture["edges"]) == 18

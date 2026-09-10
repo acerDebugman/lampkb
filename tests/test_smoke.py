@@ -126,28 +126,28 @@ def test_update_modify_no_duplicates(docs_corpus, ns, capsys, monkeypatch):
     b = str(beta)
     chunk = {
         "nodes": [
-            {"id": "beta_beta_component", "label": "Beta Component", "file_type": "document",
-             "source_file": b, "source_location": None, "source_url": None,
+            {"id": "beta_beta_component", "label": "Beta Component", "entity_type": "document",
+             "definition": "", "source_file": b, "source_location": None, "source_url": None,
              "captured_at": None, "author": None, "contributor": None},
-            {"id": "beta_session_management", "label": "Session Management", "file_type": "concept",
-             "source_file": b, "source_location": None, "source_url": None,
+            {"id": "beta_session_management", "label": "Session Management", "entity_type": "concept",
+             "definition": "", "source_file": b, "source_location": None, "source_url": None,
              "captured_at": None, "author": None, "contributor": None},
-            {"id": "beta_token_refresh", "label": "Token Refresh", "file_type": "concept",
-             "source_file": b, "source_location": None, "source_url": None,
+            {"id": "beta_token_refresh", "label": "Token Refresh", "entity_type": "procedure",
+             "definition": "", "source_file": b, "source_location": None, "source_url": None,
              "captured_at": None, "author": None, "contributor": None},
-            {"id": "beta_token_rotation", "label": "Token Rotation", "file_type": "concept",
-             "source_file": b, "source_location": None, "source_url": None,
+            {"id": "beta_token_rotation", "label": "Token Rotation", "entity_type": "method",
+             "definition": "", "source_file": b, "source_location": None, "source_url": None,
              "captured_at": None, "author": None, "contributor": None},
         ],
         "edges": [
             {"source": "beta_beta_component", "target": "beta_session_management",
-             "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0,
+             "relation": "组成", "confidence": "EXTRACTED", "confidence_score": 1.0,
              "source_file": b, "source_location": None, "weight": 1.0},
             {"source": "beta_token_refresh", "target": "beta_token_rotation",
-             "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0,
+             "relation": "顺序", "confidence": "EXTRACTED", "confidence_score": 1.0,
              "source_file": b, "source_location": None, "weight": 1.0},
         ],
-        "hyperedges": [], "input_tokens": 0, "output_tokens": 0,
+        "input_tokens": 0, "output_tokens": 0,
     }
     (docs_corpus / "kg-out" / ".kg_chunk_01.json").write_text(
         json.dumps(chunk, ensure_ascii=False), encoding="utf-8")
