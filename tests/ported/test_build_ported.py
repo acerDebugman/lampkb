@@ -381,15 +381,15 @@ def test_build_from_json_relative_source_file_unchanged(tmp_path):
     assert G.nodes["src_foo_bar"]["source_file"] == "src/foo.md"
 
 
-# --- file_type canonicalization -------------------------------------------------
+# --- entity_type canonicalization -------------------------------------------------
 
-def test_none_file_type_defaults_to_concept(capsys):
-    """Legacy nodes with file_type=None must not trigger 'invalid file_type None'
-    warnings."""
+def test_none_entity_type_defaults_to_concept(capsys):
+    """entity_type=None is defaulted to 'concept' before validation, so no
+    spurious 'invalid entity_type None' warning fires."""
     ext = {
         "nodes": [
-            {"id": "n1", "label": "Stub", "file_type": None, "source_file": "a.md"},
-            {"id": "n2", "label": "Real", "file_type": "document", "source_file": "b.md"},
+            {"id": "n1", "label": "Stub", "entity_type": None, "definition": "", "source_file": "a.md"},
+            {"id": "n2", "label": "Real", "entity_type": "document", "definition": "", "source_file": "b.md"},
         ],
         "edges": [],
         "input_tokens": 0,
@@ -397,16 +397,16 @@ def test_none_file_type_defaults_to_concept(capsys):
     }
     G = build_from_json(ext)
     err = capsys.readouterr().err
-    assert "invalid file_type" not in err
-    assert G.nodes["n1"]["file_type"] == "concept"
-    assert G.nodes["n2"]["file_type"] == "document"
+    assert "invalid entity_type" not in err
+    assert G.nodes["n1"]["entity_type"] == "concept"
+    assert G.nodes["n2"]["entity_type"] == "document"
 
 
-def test_missing_file_type_defaults_to_concept(capsys):
-    """Nodes missing file_type entirely should also be canonicalized to 'concept'."""
+def test_missing_entity_type_defaults_to_concept(capsys):
+    """Nodes missing entity_type entirely are also canonicalized to 'concept'."""
     ext = {
         "nodes": [
-            {"id": "n1", "label": "Bare", "source_file": "a.md"},
+            {"id": "n1", "label": "Bare", "definition": "", "source_file": "a.md"},
         ],
         "edges": [],
         "input_tokens": 0,
@@ -414,42 +414,45 @@ def test_missing_file_type_defaults_to_concept(capsys):
     }
     G = build_from_json(ext)
     err = capsys.readouterr().err
-    assert "invalid file_type" not in err
-    assert "missing required field 'file_type'" not in err
-    assert G.nodes["n1"]["file_type"] == "concept"
+    assert "invalid entity_type" not in err
+    assert "missing required field 'entity_type'" not in err
+    assert G.nodes["n1"]["entity_type"] == "concept"
 
 
-def test_real_invalid_file_type_coerced_to_concept():
-    """Unknown file_type values are coerced through the synonym mapper, falling
-    back to 'concept' for anything that isn't a known LLM synonym."""
+def test_invalid_entity_type_reported_not_coerced(capsys):
+    """Unknown entity_type values are no longer silently coerced to 'concept':
+    the value passes through unchanged and validation reports it."""
     ext = {
         "nodes": [
-            {"id": "n1", "label": "Bad", "file_type": "weird_type", "source_file": "a.md"},
+            {"id": "n1", "label": "Bad", "entity_type": "weird_type", "definition": "", "source_file": "a.md"},
         ],
         "edges": [],
         "input_tokens": 0,
         "output_tokens": 0,
     }
     G = build_from_json(ext)
-    assert G.nodes["n1"]["file_type"] == "concept"
+    err = capsys.readouterr().err
+    assert "invalid entity_type 'weird_type'" in err
+    assert G.nodes["n1"]["entity_type"] == "weird_type"
 
 
-def test_file_type_synonym_mapping():
-    """Known invalid file_type values map to their canonical equivalents."""
+def test_entity_type_synonym_mapping():
+    """Chinese type names from the prompt's type table and near-miss English
+    drift forms map to their canonical keys."""
     ext = {
         "nodes": [
-            {"id": "n1", "label": "MD", "file_type": "markdown", "source_file": "a.md"},
-            {"id": "n2", "label": "Tool", "file_type": "tool", "source_file": "b.md"},
-            {"id": "n3", "label": "Pat", "file_type": "pattern", "source_file": "c.md"},
+            {"id": "n1", "label": "Elm", "entity_type": "概念", "definition": "", "source_file": "a.md"},
+            {"id": "n2", "label": "Met", "entity_type": "方法", "definition": "", "source_file": "b.md"},
+            {"id": "n3", "label": "Scn", "entity_type": "scenarios", "definition": "", "source_file": "c.md"},
         ],
         "edges": [],
         "input_tokens": 0,
         "output_tokens": 0,
     }
     G = build_from_json(ext)
-    assert G.nodes["n1"]["file_type"] == "document"
-    assert G.nodes["n2"]["file_type"] == "code"
-    assert G.nodes["n3"]["file_type"] == "concept"
+    assert G.nodes["n1"]["entity_type"] == "concept"
+    assert G.nodes["n2"]["entity_type"] == "method"
+    assert G.nodes["n3"]["entity_type"] == "scenario"
 
 
 # --- ghost merge, semantic-tier cases (docs-relevant: same-file LLM duplicates) ---

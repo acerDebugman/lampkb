@@ -83,24 +83,33 @@ _EDGE_LANG_FAMILY: dict[str, str] = {
 }
 
 
-# Synonym mapper for known invalid file_type values that LLM subagents commonly
-# emit. Keeps semantic intent close (markdown→document, tool→code) and falls
-# back to "concept" for any other invalid value.
-_FILE_TYPE_SYNONYMS = {
-    "markdown": "document",
-    "text": "document",
-    "tool": "code",
-    "library": "code",
-    "pattern": "concept",
-    "principle": "concept",
-    "constraint": "concept",
-    "tech": "concept",
-    "technology": "concept",
-    "data-source": "concept",
-    "data_source": "concept",
-    "gotcha": "concept",
-    "framework": "concept",
+# Synonym mapper for entity_type drift. The extraction prompt's type table
+# prints Chinese names next to the English keys, so the common drift is emitting
+# the Chinese name (概念→concept) or a near-miss English form (scenarios→scenario).
+# Anything not in VALID_ENTITY_TYPES and not mapped here is left untouched so
+# validate_extraction reports it — no silent coercion to "concept".
+_ENTITY_TYPE_SYNONYMS = {
+    "概念": "concept",
+    "原理": "principle",
+    "方法": "method",
+    "规则": "rule",
+    "操作": "procedure",
+    "步骤": "procedure",
+    "事实": "fact",
+    "场景": "scenario",
+    "要点": "keypoint",
+    "文档": "document",
+    "concepts": "concept",
+    "methods": "method",
+    "rules": "rule",
+    "facts": "fact",
+    "scenarios": "scenario",
 }
+
+# Relation drift normalization for the 11 Chinese relations. Starts empty;
+# add observed drift forms here (e.g. an English translation the model emits)
+# as they appear in real extractions.
+_RELATION_SYNONYMS: dict[str, str] = {}
 
 
 # Hyperedge member lists are canonically keyed `nodes` (see graphify/llm.py
@@ -776,8 +785,8 @@ def _doc_twin_remap(nodes: list) -> dict[str, str]:
     bare id ``_make_id(path)`` while the semantic pass mints ``<slug>_doc`` for
     the same document. A ``graphify update`` after a semantic build leaves both,
     splitting the file's edges across two disconnected nodes. Canonicalize to the
-    semantic ``_doc`` node (it carries the richer references/hyperedges). Gated to
-    ``file_type == "document"`` on BOTH twins with an identical ``source_file``,
+    semantic ``_doc`` node (it carries the richer edges). Gated to
+    ``entity_type == "document"`` on BOTH twins with an identical ``source_file``,
     so an unrelated code symbol ``foo`` and ``foo_doc`` never merge.
     """
     by_id: dict[str, dict] = {}
@@ -794,7 +803,7 @@ def _doc_twin_remap(nodes: list) -> dict[str, str]:
         sf = node.get("source_file")
         if not sf or bare.get("source_file") != sf:
             continue
-        if node.get("file_type") != "document" or bare.get("file_type") != "document":
+        if node.get("entity_type") != "document" or bare.get("entity_type") != "document":
             continue
         remap[nid[:-4]] = nid
     return remap
@@ -851,15 +860,16 @@ def build_from_json(extraction: dict, *, directed: bool = False, root: str | Pat
         # semantic-rekey / ghost-merge passes below, all of which key on
         # label/source_file and would otherwise skip the node entirely.
         _fold_node_aliases(node)
-        # Default missing/None file_type to "concept" so legacy graph.json
-        # entries (and stub nodes preserved by `_rebuild_code` from older
-        # graphify versions that didn't always populate file_type) don't
-        # trigger spurious "invalid file_type 'None'" validator warnings.
-        if node.get("file_type") in (None, ""):
-            node["file_type"] = "concept"
-        ft = node.get("file_type", "")
-        if ft and ft not in {"code", "document", "paper", "image", "rationale", "concept"}:
-            node["file_type"] = _FILE_TYPE_SYNONYMS.get(ft, "concept")
+        # Default missing/None entity_type to "concept" so sparse fragments
+        # don't trigger spurious "invalid entity_type 'None'" validator
+        # warnings. Any other invalid value is left as-is for
+        # validate_extraction to report — silently coercing it to "concept"
+        # used to hide prompt drift.
+        if node.get("entity_type") in (None, ""):
+            node["entity_type"] = "concept"
+        et = node.get("entity_type", "")
+        if et:
+            node["entity_type"] = _ENTITY_TYPE_SYNONYMS.get(et, et)
 
     # Canonicalize hyperedge member lists: producers sometimes key the
     # member list `members`/`node_ids` instead of `nodes`. Fold aliases onto
@@ -876,6 +886,9 @@ def build_from_json(extraction: dict, *, directed: bool = False, root: str | Pat
     for edge in extraction.get("edges", []):
         if isinstance(edge, dict):
             _fold_edge_aliases(edge)
+            rel = edge.get("relation")
+            if isinstance(rel, str) and rel in _RELATION_SYNONYMS:
+                edge["relation"] = _RELATION_SYNONYMS[rel]
 
     errors = validate_extraction(extraction)
     # Dangling edges (stdlib/external imports) are expected - only warn about real schema errors.
@@ -1412,7 +1425,7 @@ def deduplicate_by_label(nodes: list[dict], edges: list[dict]) -> tuple[list[dic
     Dormant: this is NOT wired into ``build()`` — the active dedup path is
     ``deduplicate_entities`` (imported and called in ``build``), which supersedes
     it. The previous "Called in build() automatically" note was never true. It
-    also merges by label alone with no ``file_type`` guard, so it must not be
+    also merges by label alone with no ``entity_type`` guard, so it must not be
     enabled for code nodes: same-label symbols from different files/packages
     (e.g. two ``Account`` types) would collapse into one — the cross-file
     conflation ``deduplicate_entities`` deliberately avoids for code.
@@ -1953,7 +1966,7 @@ def build_merge(
             return (
                 isinstance(nid, str)
                 and not nid.endswith("_doc")
-                and n.get("file_type") == "document"
+                and n.get("entity_type") == "document"
                 and f"{nid}_doc" in G
                 and G.nodes[f"{nid}_doc"].get("source_file") == n.get("source_file")
             )
