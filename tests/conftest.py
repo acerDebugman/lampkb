@@ -21,9 +21,6 @@ FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-# Upstream graphify checkout (used by Layer 1 equivalence tests only).
-UPSTREAM_DIR = LAMPKB_ROOT.parent / "graphify"
-
 
 @pytest.fixture
 def scripts_dir() -> Path:

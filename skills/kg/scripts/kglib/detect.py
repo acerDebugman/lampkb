@@ -1843,7 +1843,7 @@ def save_manifest(
     from kglib.paths import write_json_atomic
     # Atomic write: a crash mid-write must not leave a truncated manifest that
     # detect_incremental then fails to parse.
-    write_json_atomic(manifest_path, manifest, indent=2)
+    write_json_atomic(manifest_path, manifest, indent=2, ensure_ascii=False)
 
 
 def _mtime_may_hide_a_rewrite(current_mtime: float, stored: dict) -> bool:

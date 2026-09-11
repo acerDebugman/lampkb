@@ -7,7 +7,8 @@
 # build_merge layer tests, MCP node-id tests, and
 # test_build_merge_preserves_call_edge_direction (imports the JS extractor).
 # The count/attr cases run against tests/fixtures/extraction_docs.json (the
-# upstream fixtures/extraction.json is code-flavored; counts adapted).
+# upstream fixtures/extraction.json is code-flavored; counts adapted;
+# rewritten 2026-09-10 for the 9-entity-type/11-relation taxonomy (18 nodes, 18 edges)).
 import json
 from pathlib import Path
 
@@ -31,22 +32,22 @@ def load_extraction():
 
 def test_dedupe_edges_collapses_exact_parallels():
     edges = [
-        {"source": "a", "target": "b", "relation": "references", "source_location": "L1"},
-        {"source": "a", "target": "b", "relation": "references", "source_location": "L9"},  # dup
-        {"source": "a", "target": "b", "relation": "cites"},  # different relation: kept
-        {"source": "b", "target": "c", "relation": "references"},
+        {"source": "a", "target": "b", "relation": "归属", "source_location": "L1"},
+        {"source": "a", "target": "b", "relation": "归属", "source_location": "L9"},  # dup
+        {"source": "a", "target": "b", "relation": "阐述"},  # different relation: kept
+        {"source": "b", "target": "c", "relation": "归属"},
     ]
     out = dedupe_edges(edges)
     keys = [(e["source"], e["target"], e["relation"]) for e in out]
-    assert keys == [("a", "b", "references"), ("a", "b", "cites"), ("b", "c", "references")]
+    assert keys == [("a", "b", "归属"), ("a", "b", "阐述"), ("b", "c", "归属")]
     # first occurrence wins (keeps L1, not L9)
     assert out[0]["source_location"] == "L1"
 
 
 def test_dedupe_edges_is_idempotent():
     edges = [
-        {"source": "a", "target": "b", "relation": "references"},
-        {"source": "a", "target": "b", "relation": "references"},
+        {"source": "a", "target": "b", "relation": "归属"},
+        {"source": "a", "target": "b", "relation": "归属"},
     ]
     once = dedupe_edges(edges)
     twice = dedupe_edges(once + edges)  # simulate a second update re-concatenating
@@ -59,7 +60,7 @@ def test_dedupe_nodes_collapses_by_id_last_wins():
     # must collapse same-id node dicts.
     nodes = [
         {"id": "guide", "label": "Guide", "type": "module", "source_file": "A.md"},
-        {"id": "intro", "label": "Intro", "file_type": "document"},
+        {"id": "intro", "label": "Intro", "entity_type": "document"},
         {"id": "guide", "label": "Guide", "type": "module", "source_file": "B.md"},
     ]
     out = dedupe_nodes(nodes)
@@ -73,7 +74,7 @@ def test_dedupe_nodes_collapses_by_id_last_wins():
 
 def test_build_from_json_node_count():
     G = build_from_json(load_extraction())
-    assert G.number_of_nodes() == 17
+    assert G.number_of_nodes() == 18
 
 
 def test_build_from_json_edge_count():
@@ -83,18 +84,18 @@ def test_build_from_json_edge_count():
 
 def test_nodes_have_label():
     G = build_from_json(load_extraction())
-    assert G.nodes["papers_attention_attention_is_all_you_need"]["label"] == "Attention Is All You Need"
+    assert G.nodes["docs_manual_element"]["label"] == "元素"
 
 
 def test_edges_have_confidence():
     G = build_from_json(load_extraction())
-    data = G.edges["notes_glossary_embedding", "docs_design_embedding_layer"]
+    data = G.edges["docs_analysis_root_cause", "docs_analysis_quality_scenario"]
     assert data["confidence"] == "INFERRED"
 
 
 def test_ambiguous_edge_preserved():
     G = build_from_json(load_extraction())
-    data = G.edges["notes_research_residual_connection", "papers_attention_positional_encoding"]
+    data = G.edges["docs_analysis_ai_connection_rule", "notes_ops_session_independence"]
     assert data["confidence"] == "AMBIGUOUS"
 
 
@@ -107,14 +108,14 @@ def test_null_weight_edge_builds_and_clusters(tmp_path):
     from kglib.cluster import cluster
     extraction = {
         "nodes": [
-            {"id": "a", "label": "A", "file_type": "document", "source_file": "a.md"},
-            {"id": "b", "label": "B", "file_type": "document", "source_file": "b.md"},
-            {"id": "c", "label": "C", "file_type": "document", "source_file": "c.md"},
+            {"id": "a", "label": "A", "entity_type": "document", "source_file": "a.md"},
+            {"id": "b", "label": "B", "entity_type": "document", "source_file": "b.md"},
+            {"id": "c", "label": "C", "entity_type": "document", "source_file": "c.md"},
         ],
         "edges": [
-            {"source": "a", "target": "b", "relation": "references", "weight": None,
+            {"source": "a", "target": "b", "relation": "归属", "weight": None,
              "confidence_score": None},
-            {"source": "b", "target": "c", "relation": "references", "weight": 2.5},
+            {"source": "b", "target": "c", "relation": "归属", "weight": 2.5},
         ],
     }
     G = build_from_json(extraction)
@@ -128,12 +129,12 @@ def test_malformed_weights_normalize():
     """Non-numeric / NaN / inf / negative weights fall back to 1.0 (the backends
     reject them); a missing weight key is left absent (backends default it)."""
     extraction = {
-        "nodes": [{"id": f"n{i}", "label": str(i), "file_type": "document",
+        "nodes": [{"id": f"n{i}", "label": str(i), "entity_type": "document",
                    "source_file": f"{i}.md"} for i in range(4)],
         "edges": [
-            {"source": "n0", "target": "n1", "relation": "references", "weight": "3.5"},
-            {"source": "n1", "target": "n2", "relation": "references", "weight": float("nan")},
-            {"source": "n2", "target": "n3", "relation": "references", "weight": -4},
+            {"source": "n0", "target": "n1", "relation": "归属", "weight": "3.5"},
+            {"source": "n1", "target": "n2", "relation": "归属", "weight": float("nan")},
+            {"source": "n2", "target": "n3", "relation": "归属", "weight": -4},
         ],
     }
     G = build_from_json(extraction)
@@ -146,7 +147,7 @@ def test_malformed_weights_normalize():
 
 def test_legacy_node_source_canonicalized():
     """Legacy 'source' key on nodes is renamed to 'source_file' before graph build."""
-    ext = {"nodes": [{"id": "n1", "label": "A", "file_type": "document", "source": "a.md"}],
+    ext = {"nodes": [{"id": "n1", "label": "A", "entity_type": "document", "source": "a.md"}],
            "edges": [], "input_tokens": 0, "output_tokens": 0}
     G = build_from_json(ext)
     assert "source_file" in G.nodes["n1"]
@@ -156,9 +157,9 @@ def test_legacy_node_source_canonicalized():
 
 def test_legacy_edge_from_to_canonicalized():
     """Legacy 'from'/'to' keys on edges are accepted alongside 'source'/'target'."""
-    ext = {"nodes": [{"id": "n1", "label": "A", "file_type": "document", "source_file": "a.md"},
-                     {"id": "n2", "label": "B", "file_type": "document", "source_file": "b.md"}],
-           "edges": [{"from": "n1", "to": "n2", "relation": "references",
+    ext = {"nodes": [{"id": "n1", "label": "A", "entity_type": "document", "source_file": "a.md"},
+                     {"id": "n2", "label": "B", "entity_type": "document", "source_file": "b.md"}],
+           "edges": [{"from": "n1", "to": "n2", "relation": "归属",
                       "confidence": "EXTRACTED", "source_file": "a.md", "weight": 1.0}],
            "input_tokens": 0, "output_tokens": 0}
     G = build_from_json(ext)
@@ -168,9 +169,10 @@ def test_legacy_edge_from_to_canonicalized():
 def test_legacy_node_name_path_aliases_folded():
     """Nodes carrying `name`/`path` instead of `label`/`source_file` must
     be canonicalized before validation, not enter the graph as label-less
-    ghosts. After build the canonicalized dict also passes validation."""
+    ghosts."""
     from kglib.validate import validate_extraction
-    ext = {"nodes": [{"id": "n1", "name": "Foo", "path": "a/b.md", "file_type": "concept"}],
+    ext = {"nodes": [{"id": "n1", "name": "Foo", "path": "a/b.md",
+                      "entity_type": "concept", "definition": ""}],
            "edges": [], "input_tokens": 0, "output_tokens": 0}
     G = build_from_json(ext)
     attrs = G.nodes["n1"]
@@ -188,14 +190,14 @@ def test_legacy_edge_type_confidence_score_aliases_folded():
     `relation`/`confidence` fold to canonical fields. Recovery confidence is
     INFERRED (never EXTRACTED — alias recovery is not provenance) and the
     companion confidence_score float is retained, not popped."""
-    ext = {"nodes": [{"id": "n1", "label": "A", "file_type": "document", "source_file": "a.md"},
-                     {"id": "n2", "label": "B", "file_type": "document", "source_file": "b.md"}],
-           "edges": [{"source": "n1", "target": "n2", "type": "references",
+    ext = {"nodes": [{"id": "n1", "label": "A", "entity_type": "document", "source_file": "a.md"},
+                     {"id": "n2", "label": "B", "entity_type": "document", "source_file": "b.md"}],
+           "edges": [{"source": "n1", "target": "n2", "type": "归属",
                       "confidence_score": 0.9, "source_file": "a.md"}],
            "input_tokens": 0, "output_tokens": 0}
     G = build_from_json(ext)
     data = edge_data(G, "n1", "n2")
-    assert data["relation"] == "references"
+    assert data["relation"] == "归属"
     assert data["confidence"] == "INFERRED"
     assert data["confidence_score"] == 0.9
     assert "type" not in data
@@ -205,7 +207,7 @@ def test_node_alias_canonical_field_wins():
     """When both the canonical field and its alias are present, the
     canonical value wins and the alias key is left untouched."""
     ext = {"nodes": [{"id": "n1", "label": "Real", "name": "Alias",
-                      "file_type": "document", "source_file": "a.md"}],
+                      "entity_type": "document", "source_file": "a.md"}],
            "edges": [], "input_tokens": 0, "output_tokens": 0}
     G = build_from_json(ext)
     assert G.nodes["n1"]["label"] == "Real"
@@ -216,7 +218,7 @@ def test_alias_node_gets_nonempty_norm_label(tmp_path):
     """A recovered alias node must serialize with a non-empty norm_label
     so query/explain can find it."""
     from kglib.export import to_json
-    ext = {"nodes": [{"id": "n1", "name": "Foo", "path": "a/b.md", "file_type": "concept"}],
+    ext = {"nodes": [{"id": "n1", "name": "Foo", "path": "a/b.md", "entity_type": "concept"}],
            "edges": [], "input_tokens": 0, "output_tokens": 0}
     G = build_from_json(ext)
     out = tmp_path / "graph.json"
@@ -230,11 +232,11 @@ def test_extraction_warning_breakdown_by_cause(capsys):
     """A mixed batch of schema errors must report per-cause counts, not
     just the first error."""
     ext = {"nodes": [
-        {"id": "n1", "label": "A", "file_type": "document", "source_file": "a.md"},
-        {"id": "n2", "label": "B", "file_type": "document", "source_file": "b.md"},
+        {"id": "n1", "label": "A", "entity_type": "document", "source_file": "a.md"},
+        {"id": "n2", "label": "B", "entity_type": "document", "source_file": "b.md"},
         # two nodes missing label (and carrying no name alias)
-        {"id": "x1", "file_type": "document", "source_file": "x.md"},
-        {"id": "x2", "file_type": "document", "source_file": "x.md"},
+        {"id": "x1", "entity_type": "document", "source_file": "x.md"},
+        {"id": "x2", "entity_type": "document", "source_file": "x.md"},
     ], "edges": [
         # three edges missing relation (and carrying no type alias)
         {"source": "n1", "target": "n2", "confidence": "EXTRACTED", "source_file": "a.md"},
@@ -258,12 +260,12 @@ def test_absolute_derived_semantic_ids_rekeyed(tmp_path):
     abs_sf = str(tmp_path / "docs" / "DATAFLOW.md")
     abs_stem = make_id(str(tmp_path / "docs" / "DATAFLOW"))
     ext = {"nodes": [
-        {"id": abs_stem, "label": "DATAFLOW.md", "file_type": "document",
+        {"id": abs_stem, "label": "DATAFLOW.md", "entity_type": "document",
          "source_file": abs_sf},
-        {"id": f"{abs_stem}_pipeline", "label": "Pipeline", "file_type": "concept",
+        {"id": f"{abs_stem}_pipeline", "label": "Pipeline", "entity_type": "concept",
          "source_file": abs_sf},
     ], "edges": [
-        {"source": abs_stem, "target": f"{abs_stem}_pipeline", "relation": "describes",
+        {"source": abs_stem, "target": f"{abs_stem}_pipeline", "relation": "阐述",
          "confidence": "INFERRED", "source_file": abs_sf, "weight": 1.0},
     ], "input_tokens": 0, "output_tokens": 0}
     G = build_from_json(ext, root=tmp_path)
@@ -282,7 +284,7 @@ def test_absolute_derived_semantic_ids_rekeyed_backslash(tmp_path):
     abs_sf = str(tmp_path / "docs" / "DATAFLOW.md").replace("/", "\\")
     abs_stem = make_id(str(tmp_path / "docs" / "DATAFLOW"))
     ext = {"nodes": [
-        {"id": f"{abs_stem}_pipeline", "label": "Pipeline", "file_type": "concept",
+        {"id": f"{abs_stem}_pipeline", "label": "Pipeline", "entity_type": "concept",
          "source_file": abs_sf},
     ], "edges": [], "input_tokens": 0, "output_tokens": 0}
     G = build_from_json(ext, root=tmp_path)
@@ -307,8 +309,8 @@ def test_source_file_backslash_normalized():
     """Windows backslash paths and POSIX paths for the same file must produce one node."""
     extraction = {
         "nodes": [
-            {"id": "n1", "label": "A", "file_type": "document", "source_file": "src\\middleware\\auth.md"},
-            {"id": "n2", "label": "B", "file_type": "document", "source_file": "src/middleware/auth.md"},
+            {"id": "n1", "label": "A", "entity_type": "document", "source_file": "src\\middleware\\auth.md"},
+            {"id": "n2", "label": "B", "entity_type": "document", "source_file": "src/middleware/auth.md"},
         ],
         "edges": [],
         "input_tokens": 0, "output_tokens": 0,
@@ -323,11 +325,11 @@ def test_edge_missing_source_file_backfilled_from_node():
     source node rather than reach graph.json with no file reference."""
     extraction = {
         "nodes": [
-            {"id": "n1", "label": "A", "file_type": "concept", "source_file": "docs/a.md"},
-            {"id": "n2", "label": "B", "file_type": "concept", "source_file": "docs/b.md"},
+            {"id": "n1", "label": "A", "entity_type": "concept", "source_file": "docs/a.md"},
+            {"id": "n2", "label": "B", "entity_type": "concept", "source_file": "docs/b.md"},
         ],
         # No source_file on the edge (as LLM output sometimes omits it).
-        "edges": [{"source": "n1", "target": "n2", "relation": "relates_to", "confidence": "INFERRED"}],
+        "edges": [{"source": "n1", "target": "n2", "relation": "影响", "confidence": "INFERRED"}],
         "input_tokens": 0, "output_tokens": 0,
     }
     G = build_from_json(extraction)
@@ -336,10 +338,10 @@ def test_edge_missing_source_file_backfilled_from_node():
 
 
 def test_build_merges_multiple_extractions():
-    ext1 = {"nodes": [{"id": "n1", "label": "A", "file_type": "document", "source_file": "a.md"}],
+    ext1 = {"nodes": [{"id": "n1", "label": "A", "entity_type": "document", "source_file": "a.md"}],
             "edges": [], "input_tokens": 0, "output_tokens": 0}
-    ext2 = {"nodes": [{"id": "n2", "label": "B", "file_type": "document", "source_file": "b.md"}],
-            "edges": [{"source": "n1", "target": "n2", "relation": "references",
+    ext2 = {"nodes": [{"id": "n2", "label": "B", "entity_type": "document", "source_file": "b.md"}],
+            "edges": [{"source": "n1", "target": "n2", "relation": "归属",
                        "confidence": "INFERRED", "source_file": "b.md", "weight": 1.0}],
             "input_tokens": 0, "output_tokens": 0}
     G = build([ext1, ext2])
@@ -355,11 +357,11 @@ def test_build_from_json_relativizes_absolute_source_file(tmp_path):
     abs_path = str(root / "docs" / "overview.md")
     extraction = {
         "nodes": [
-            {"id": "overview_intro", "label": "Intro", "source_file": abs_path, "file_type": "document"},
+            {"id": "overview_intro", "label": "Intro", "source_file": abs_path, "entity_type": "document"},
         ],
         "edges": [
             {"source": "overview_intro", "target": "overview_intro",
-             "relation": "self", "confidence": "EXTRACTED", "confidence_score": 1.0,
+             "relation": "影响", "confidence": "EXTRACTED", "confidence_score": 1.0,
              "source_file": abs_path},
         ],
     }
@@ -373,7 +375,7 @@ def test_build_from_json_relativizes_absolute_source_file(tmp_path):
 def test_build_from_json_relative_source_file_unchanged(tmp_path):
     """Already-relative source_file paths must not be modified."""
     extraction = {
-        "nodes": [{"id": "foo_bar", "label": "bar", "source_file": "src/foo.md", "file_type": "document"}],
+        "nodes": [{"id": "foo_bar", "label": "bar", "source_file": "src/foo.md", "entity_type": "document"}],
         "edges": [],
     }
     G = build_from_json(extraction, root=tmp_path)
@@ -381,15 +383,15 @@ def test_build_from_json_relative_source_file_unchanged(tmp_path):
     assert G.nodes["src_foo_bar"]["source_file"] == "src/foo.md"
 
 
-# --- file_type canonicalization -------------------------------------------------
+# --- entity_type canonicalization -------------------------------------------------
 
-def test_none_file_type_defaults_to_concept(capsys):
-    """Legacy nodes with file_type=None must not trigger 'invalid file_type None'
-    warnings."""
+def test_none_entity_type_defaults_to_concept(capsys):
+    """entity_type=None is defaulted to 'concept' before validation, so no
+    spurious 'invalid entity_type None' warning fires."""
     ext = {
         "nodes": [
-            {"id": "n1", "label": "Stub", "file_type": None, "source_file": "a.md"},
-            {"id": "n2", "label": "Real", "file_type": "document", "source_file": "b.md"},
+            {"id": "n1", "label": "Stub", "entity_type": None, "definition": "", "source_file": "a.md"},
+            {"id": "n2", "label": "Real", "entity_type": "document", "definition": "", "source_file": "b.md"},
         ],
         "edges": [],
         "input_tokens": 0,
@@ -397,16 +399,16 @@ def test_none_file_type_defaults_to_concept(capsys):
     }
     G = build_from_json(ext)
     err = capsys.readouterr().err
-    assert "invalid file_type" not in err
-    assert G.nodes["n1"]["file_type"] == "concept"
-    assert G.nodes["n2"]["file_type"] == "document"
+    assert "invalid entity_type" not in err
+    assert G.nodes["n1"]["entity_type"] == "concept"
+    assert G.nodes["n2"]["entity_type"] == "document"
 
 
-def test_missing_file_type_defaults_to_concept(capsys):
-    """Nodes missing file_type entirely should also be canonicalized to 'concept'."""
+def test_missing_entity_type_defaults_to_concept(capsys):
+    """Nodes missing entity_type entirely are also canonicalized to 'concept'."""
     ext = {
         "nodes": [
-            {"id": "n1", "label": "Bare", "source_file": "a.md"},
+            {"id": "n1", "label": "Bare", "definition": "", "source_file": "a.md"},
         ],
         "edges": [],
         "input_tokens": 0,
@@ -414,42 +416,45 @@ def test_missing_file_type_defaults_to_concept(capsys):
     }
     G = build_from_json(ext)
     err = capsys.readouterr().err
-    assert "invalid file_type" not in err
-    assert "missing required field 'file_type'" not in err
-    assert G.nodes["n1"]["file_type"] == "concept"
+    assert "invalid entity_type" not in err
+    assert "missing required field 'entity_type'" not in err
+    assert G.nodes["n1"]["entity_type"] == "concept"
 
 
-def test_real_invalid_file_type_coerced_to_concept():
-    """Unknown file_type values are coerced through the synonym mapper, falling
-    back to 'concept' for anything that isn't a known LLM synonym."""
+def test_invalid_entity_type_reported_not_coerced(capsys):
+    """Unknown entity_type values are no longer silently coerced to 'concept':
+    the value passes through unchanged and validation reports it."""
     ext = {
         "nodes": [
-            {"id": "n1", "label": "Bad", "file_type": "weird_type", "source_file": "a.md"},
+            {"id": "n1", "label": "Bad", "entity_type": "weird_type", "definition": "", "source_file": "a.md"},
         ],
         "edges": [],
         "input_tokens": 0,
         "output_tokens": 0,
     }
     G = build_from_json(ext)
-    assert G.nodes["n1"]["file_type"] == "concept"
+    err = capsys.readouterr().err
+    assert "invalid entity_type 'weird_type'" in err
+    assert G.nodes["n1"]["entity_type"] == "weird_type"
 
 
-def test_file_type_synonym_mapping():
-    """Known invalid file_type values map to their canonical equivalents."""
+def test_entity_type_synonym_mapping():
+    """Chinese type names from the prompt's type table and near-miss English
+    drift forms map to their canonical keys."""
     ext = {
         "nodes": [
-            {"id": "n1", "label": "MD", "file_type": "markdown", "source_file": "a.md"},
-            {"id": "n2", "label": "Tool", "file_type": "tool", "source_file": "b.md"},
-            {"id": "n3", "label": "Pat", "file_type": "pattern", "source_file": "c.md"},
+            {"id": "n1", "label": "Elm", "entity_type": "概念", "definition": "", "source_file": "a.md"},
+            {"id": "n2", "label": "Met", "entity_type": "方法", "definition": "", "source_file": "b.md"},
+            {"id": "n3", "label": "Scn", "entity_type": "scenarios", "definition": "", "source_file": "c.md"},
         ],
         "edges": [],
         "input_tokens": 0,
         "output_tokens": 0,
     }
     G = build_from_json(ext)
-    assert G.nodes["n1"]["file_type"] == "document"
-    assert G.nodes["n2"]["file_type"] == "code"
-    assert G.nodes["n3"]["file_type"] == "concept"
+    assert G.nodes["n1"]["entity_type"] == "concept"
+    assert G.nodes["n2"]["entity_type"] == "method"
+    assert G.nodes["n3"]["entity_type"] == "scenario"
 
 
 # --- ghost merge, semantic-tier cases (docs-relevant: same-file LLM duplicates) ---
@@ -460,14 +465,14 @@ def test_ghost_merge_not_across_directories_same_basename():
     basename collapsed docs/product_a/index.md and docs/product_b/index.md)."""
     ext = {
         "nodes": [
-            {"id": "docs_a_index", "label": "Quickstart", "file_type": "document",
+            {"id": "docs_a_index", "label": "Quickstart", "entity_type": "document",
              "source_file": "docs/product_a/index.md", "source_location": "L1"},
-            {"id": "docs_b_index", "label": "Quickstart", "file_type": "document",
+            {"id": "docs_b_index", "label": "Quickstart", "entity_type": "document",
              "source_file": "docs/product_b/index.md"},
-            {"id": "docs_hub", "label": "Docs", "file_type": "concept",
+            {"id": "docs_hub", "label": "Docs", "entity_type": "concept",
              "source_file": "docs/hub.md", "source_location": "L1"},
         ],
-        "edges": [{"source": "docs_hub", "target": "docs_b_index", "relation": "links_to",
+        "edges": [{"source": "docs_hub", "target": "docs_b_index", "relation": "影响",
                    "confidence": "INFERRED", "source_file": "docs/hub.md"}],
         "input_tokens": 0, "output_tokens": 0,
     }
@@ -485,9 +490,9 @@ def test_ghost_merge_non_ast_different_files_both_survive():
     ext = {
         "nodes": [
             {"id": "dir_a_update_build_merge", "label": "build_merge() function",
-             "file_type": "concept", "source_file": "dir_a/update.md", "source_location": "L10"},
+             "entity_type": "concept", "source_file": "dir_a/update.md", "source_location": "L10"},
             {"id": "dir_b_update_build_merge", "label": "build_merge() function",
-             "file_type": "concept", "source_file": "dir_b/update.md", "source_location": "L12"},
+             "entity_type": "concept", "source_file": "dir_b/update.md", "source_location": "L12"},
         ],
         "edges": [],
     }
@@ -501,9 +506,9 @@ def test_ghost_merge_non_ast_same_file_still_merges():
     so the ghost-merge fix doesn't leave same-file LLM duplicates behind."""
     ext = {
         "nodes": [
-            {"id": "a_foo", "label": "Foo", "file_type": "concept",
+            {"id": "a_foo", "label": "Foo", "entity_type": "concept",
              "source_file": "x/doc.md", "source_location": "L1"},
-            {"id": "b_foo", "label": "Foo", "file_type": "concept",
+            {"id": "b_foo", "label": "Foo", "entity_type": "concept",
              "source_file": "x/doc.md", "source_location": "L2"},
         ],
         "edges": [],
@@ -518,7 +523,7 @@ def test_build_merge_inherits_directed_flag_from_disk(tmp_path):
     """build_merge with no explicit `directed=` must honor the on-disk graph's
     own `directed` flag instead of silently defaulting to False."""
     ext = {
-        "nodes": [{"id": "a", "label": "a", "file_type": "concept",
+        "nodes": [{"id": "a", "label": "a", "entity_type": "concept",
                    "source_file": "x.md", "source_location": "L1"}],
         "edges": [],
     }
@@ -552,7 +557,7 @@ def test_build_merge_explicit_directed_overrides_disk_flag(tmp_path):
     """An explicit directed=True/False from the caller must still win over
     whatever is stored on disk."""
     ext = {
-        "nodes": [{"id": "a", "label": "a", "file_type": "concept",
+        "nodes": [{"id": "a", "label": "a", "entity_type": "concept",
                    "source_file": "x.md", "source_location": "L1"}],
         "edges": [],
     }
@@ -581,13 +586,13 @@ def test_build_from_json_preserves_first_direction_on_bidirectional_pair(tmp_pat
 
     extraction = {
         "nodes": [
-            {"id": "a_handler", "label": "a", "file_type": "document", "source_file": "a.md"},
-            {"id": "z_emitter", "label": "z", "file_type": "document", "source_file": "z.md"},
+            {"id": "a_handler", "label": "a", "entity_type": "document", "source_file": "a.md"},
+            {"id": "z_emitter", "label": "z", "entity_type": "document", "source_file": "z.md"},
         ],
         "edges": [
-            {"source": "a_handler", "target": "z_emitter", "relation": "cites",
+            {"source": "a_handler", "target": "z_emitter", "relation": "归属",
              "confidence": "EXTRACTED", "source_file": "a.md"},
-            {"source": "z_emitter", "target": "a_handler", "relation": "cites",
+            {"source": "z_emitter", "target": "a_handler", "relation": "归属",
              "confidence": "EXTRACTED", "source_file": "z.md"},
         ],
         "input_tokens": 0,
@@ -602,60 +607,60 @@ def test_build_from_json_preserves_first_direction_on_bidirectional_pair(tmp_pat
     graph_path = tmp_path / "graph.json"
     assert to_json(G, {}, str(graph_path), force=True)
     saved = json.loads(graph_path.read_text())
-    saved_cites = [e for e in saved.get("links", saved.get("edges", []))
-                   if e.get("relation") == "cites"]
-    assert len(saved_cites) == 1
-    assert saved_cites[0]["source"] == "a_handler"
-    assert saved_cites[0]["target"] == "z_emitter"
+    saved_edges = [e for e in saved.get("links", saved.get("edges", []))
+                   if e.get("relation") == "归属"]
+    assert len(saved_edges) == 1
+    assert saved_edges[0]["source"] == "a_handler"
+    assert saved_edges[0]["target"] == "z_emitter"
 
 
 # --- edge_data / edge_datas -----------------------------------------------------
 
 def test_edge_data_simple_graph():
     G = nx.Graph()
-    G.add_edge("a", "b", relation="references", confidence="EXTRACTED")
+    G.add_edge("a", "b", relation="归属", confidence="EXTRACTED")
     d = edge_data(G, "a", "b")
     assert isinstance(d, dict)
-    assert d["relation"] == "references"
+    assert d["relation"] == "归属"
     assert d["confidence"] == "EXTRACTED"
 
 
 def test_edge_datas_simple_graph_returns_singleton_list():
     G = nx.Graph()
-    G.add_edge("a", "b", relation="references", confidence="EXTRACTED")
+    G.add_edge("a", "b", relation="归属", confidence="EXTRACTED")
     ds = edge_datas(G, "a", "b")
     assert isinstance(ds, list)
     assert len(ds) == 1
-    assert ds[0]["relation"] == "references"
+    assert ds[0]["relation"] == "归属"
 
 
 def test_edge_data_multigraph_with_parallel_edges():
     G = nx.MultiGraph()
-    G.add_edge("a", "b", relation="cites", confidence="EXTRACTED")
-    G.add_edge("a", "b", relation="references", confidence="INFERRED")
+    G.add_edge("a", "b", relation="阐述", confidence="EXTRACTED")
+    G.add_edge("a", "b", relation="归属", confidence="INFERRED")
     d = edge_data(G, "a", "b")
     assert isinstance(d, dict)
-    assert d.get("relation") in ("cites", "references")
+    assert d.get("relation") in ("阐述", "归属")
 
 
 def test_edge_datas_multigraph_returns_all_parallel_edges():
     G = nx.MultiGraph()
-    G.add_edge("a", "b", relation="cites", confidence="EXTRACTED")
-    G.add_edge("a", "b", relation="references", confidence="INFERRED")
+    G.add_edge("a", "b", relation="阐述", confidence="EXTRACTED")
+    G.add_edge("a", "b", relation="归属", confidence="INFERRED")
     ds = edge_datas(G, "a", "b")
     assert isinstance(ds, list)
     assert len(ds) == 2
     relations = {e.get("relation") for e in ds}
-    assert relations == {"cites", "references"}
+    assert relations == {"阐述", "归属"}
 
 
 def test_edge_data_multidigraph():
     G = nx.MultiDiGraph()
-    G.add_edge("a", "b", relation="cites")
-    G.add_edge("a", "b", relation="references")
+    G.add_edge("a", "b", relation="阐述")
+    G.add_edge("a", "b", relation="归属")
     d = edge_data(G, "a", "b")
     assert isinstance(d, dict)
-    assert d.get("relation") in ("cites", "references")
+    assert d.get("relation") in ("阐述", "归属")
     ds = edge_datas(G, "a", "b")
     assert len(ds) == 2
 
@@ -672,8 +677,8 @@ def test_edge_data_node_link_multigraph_roundtrip():
             {"id": "b", "label": "B"},
         ],
         "links": [
-            {"source": "a", "target": "b", "relation": "cites", "confidence": "EXTRACTED"},
-            {"source": "a", "target": "b", "relation": "references", "confidence": "INFERRED"},
+            {"source": "a", "target": "b", "relation": "阐述", "confidence": "EXTRACTED"},
+            {"source": "a", "target": "b", "relation": "归属", "confidence": "INFERRED"},
         ],
     }
     try:
@@ -683,7 +688,7 @@ def test_edge_data_node_link_multigraph_roundtrip():
     assert isinstance(G, nx.MultiGraph)
     d = edge_data(G, "a", "b")
     assert isinstance(d, dict)
-    assert d.get("relation") in ("cites", "references")
+    assert d.get("relation") in ("阐述", "归属")
     ds = edge_datas(G, "a", "b")
     assert len(ds) == 2
 
@@ -696,9 +701,9 @@ def test_build_from_json_skips_non_hashable_node_id():
     # build the graph from the well-formed nodes.
     extraction = {
         "nodes": [
-            {"id": "a", "label": "A", "file_type": "document", "source_file": "a.md"},
-            {"id": ["x", "y"], "label": "B", "file_type": "document", "source_file": "b.md"},
-            {"label": "C", "file_type": "document", "source_file": "c.md"},  # missing id
+            {"id": "a", "label": "A", "entity_type": "document", "source_file": "a.md"},
+            {"id": ["x", "y"], "label": "B", "entity_type": "document", "source_file": "b.md"},
+            {"label": "C", "entity_type": "document", "source_file": "c.md"},  # missing id
         ],
         "edges": [],
     }
@@ -711,13 +716,13 @@ def test_build_from_json_skips_edge_with_non_hashable_endpoint():
     # `not in node_set` membership test. The well-formed edge survives.
     extraction = {
         "nodes": [
-            {"id": "a", "label": "A", "file_type": "document", "source_file": "a.md"},
-            {"id": "b", "label": "B", "file_type": "document", "source_file": "b.md"},
+            {"id": "a", "label": "A", "entity_type": "document", "source_file": "a.md"},
+            {"id": "b", "label": "B", "entity_type": "document", "source_file": "b.md"},
         ],
         "edges": [
-            {"source": "a", "target": ["b", "c"], "relation": "references",
+            {"source": "a", "target": ["b", "c"], "relation": "归属",
              "confidence": "INFERRED", "source_file": "a.md"},
-            {"source": "a", "target": "b", "relation": "cites",
+            {"source": "a", "target": "b", "relation": "阐述",
              "confidence": "EXTRACTED", "source_file": "a.md"},
         ],
     }
@@ -750,19 +755,19 @@ def test_markdown_doc_twin_merges_into_semantic_doc_node():
     consolidated — otherwise a document is two disconnected halves."""
     ext = {
         "nodes": [
-            {"id": "docs_readme_doc", "label": "README", "file_type": "document",
+            {"id": "docs_readme_doc", "label": "README", "entity_type": "document",
              "source_file": "docs/readme.md", "source_location": "L1"},
-            {"id": "docs_readme", "label": "readme.md", "file_type": "document",
+            {"id": "docs_readme", "label": "readme.md", "entity_type": "document",
              "source_file": "docs/readme.md", "source_location": "L1"},
-            {"id": "concept_auth", "label": "auth", "file_type": "concept",
+            {"id": "concept_auth", "label": "auth", "entity_type": "concept",
              "source_file": "auth.md", "source_location": "L1"},
-            {"id": "docs_guide", "label": "guide.md", "file_type": "document",
+            {"id": "docs_guide", "label": "guide.md", "entity_type": "document",
              "source_file": "docs/guide.md", "source_location": "L1"},
         ],
         "edges": [
-            {"source": "docs_readme_doc", "target": "concept_auth", "relation": "references",
+            {"source": "docs_readme_doc", "target": "concept_auth", "relation": "归属",
              "source_file": "docs/readme.md", "confidence": "INFERRED", "weight": 1.0},
-            {"source": "docs_guide", "target": "docs_readme", "relation": "references",
+            {"source": "docs_guide", "target": "docs_readme", "relation": "归属",
              "source_file": "docs/guide.md", "confidence": "EXTRACTED", "weight": 1.0},
         ],
     }
@@ -775,42 +780,18 @@ def test_markdown_doc_twin_merges_into_semantic_doc_node():
 
 def test_doc_twin_merge_does_not_touch_non_document_nodes():
     """Doc-twin guard: a concept `foo` and an unrelated `foo_doc` (not
-    file_type=document) must NOT merge, even sharing a source_file."""
+    entity_type=document) must NOT merge, even sharing a source_file."""
     ext = {
         "nodes": [
-            {"id": "m_foo", "label": "foo", "file_type": "concept",
+            {"id": "m_foo", "label": "foo", "entity_type": "concept",
              "source_file": "m.md", "source_location": "L1"},
-            {"id": "m_foo_doc", "label": "foo rationale", "file_type": "rationale",
+            {"id": "m_foo_doc", "label": "foo rationale", "entity_type": "method",
              "source_file": "m.md", "source_location": "L2"},
         ],
         "edges": [],
     }
     G = build_from_json(ext, directed=False)
     assert {"m_foo", "m_foo_doc"} <= set(G.nodes())
-
-
-# --- hyperedge member revalidation ------------------------------------------------
-
-def test_build_from_json_prunes_dangling_hyperedge_members(capsys):
-    """Members absent from the built node set are pruned — matching how
-    dangling pairwise edges are skipped — and a hyperedge with no surviving
-    member is dropped whole."""
-    ext = {
-        "nodes": [
-            {"id": "alpha", "label": "alpha", "file_type": "document", "source_file": "a.md"},
-            {"id": "beta", "label": "beta", "file_type": "document", "source_file": "a.md"},
-        ],
-        "edges": [],
-        "hyperedges": [
-            {"id": "he_partial", "nodes": ["alpha", "beta", "ghost_member"], "source_file": "a.md"},
-            {"id": "he_all_ghost", "nodes": ["ghost1", "ghost2"], "source_file": "a.md"},
-        ],
-    }
-    G = build_from_json(ext)
-    hes = {h["id"]: h for h in G.graph.get("hyperedges", [])}
-    assert set(hes) == {"he_partial"}, "an all-dangling hyperedge must be dropped"
-    assert hes["he_partial"]["nodes"] == ["alpha", "beta"]
-    assert "he_all_ghost" in capsys.readouterr().err
 
 
 # --- foreign-absolute source_file portability -------------------------------------

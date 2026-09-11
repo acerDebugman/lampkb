@@ -15,9 +15,10 @@ import json
 from pathlib import Path
 
 
-def _node(nid, label, file_type, source_file, **extra):
+def _node(nid, label, entity_type, source_file, definition="", **extra):
     n = {
-        "id": nid, "label": label, "file_type": file_type,
+        "id": nid, "label": label, "entity_type": entity_type,
+        "definition": definition,
         "source_file": source_file, "source_location": None,
         "source_url": None, "captured_at": None, "author": None, "contributor": None,
     }
@@ -48,18 +49,18 @@ def write_smoke_chunks(corpus: Path) -> int:
     chunk1 = {
         "nodes": [
             _node("alpha_alpha_service", "Alpha Service", "document", a),
-            _node("alpha_authentication", "Authentication", "concept", a),
+            _node("alpha_authentication", "Authentication", "concept", a,
+                  definition="Authentication verifies the caller's identity."),
             _node("beta_beta_component", "Beta Component", "document", b),
             _node("beta_session_management", "Session Management", "concept", b),
-            _node("beta_token_refresh", "Token Refresh", "concept", b),
+            _node("beta_token_refresh", "Token Refresh", "procedure", b),
         ],
         "edges": [
-            _edge("alpha_alpha_service", "alpha_authentication", "references", "EXTRACTED", 1.0, a),
-            _edge("alpha_alpha_service", "beta_beta_component", "references", "EXTRACTED", 1.0, a),
-            _edge("beta_beta_component", "beta_session_management", "references", "EXTRACTED", 1.0, b),
-            _edge("beta_session_management", "beta_token_refresh", "conceptually_related_to", "INFERRED", 0.85, b),
+            _edge("alpha_alpha_service", "alpha_authentication", "组成", "EXTRACTED", 1.0, a),
+            _edge("alpha_alpha_service", "beta_beta_component", "影响", "EXTRACTED", 1.0, a),
+            _edge("beta_beta_component", "beta_session_management", "组成", "EXTRACTED", 1.0, b),
+            _edge("beta_session_management", "beta_token_refresh", "顺序", "INFERRED", 0.85, b),
         ],
-        "hyperedges": [],
         "input_tokens": 0, "output_tokens": 0,
     }
     chunk2 = {
@@ -69,17 +70,11 @@ def write_smoke_chunks(corpus: Path) -> int:
             _node("docs_delta_delta_metrics", "Delta Metrics", "document", d),
         ],
         "edges": [
-            _edge("docs_gamma_gamma_audit_log", "alpha_authentication", "references", "EXTRACTED", 1.0, g),
-            _edge("alpha_alpha_service", "docs_config_config_loader", "references", "EXTRACTED", 1.0, c),
-            _edge("beta_beta_component", "docs_config_config_loader", "references", "EXTRACTED", 1.0, c),
-            _edge("docs_delta_delta_metrics", "docs_config_config_loader", "references", "EXTRACTED", 1.0, d),
-            _edge("docs_delta_delta_metrics", "docs_gamma_gamma_audit_log", "semantically_similar_to", "INFERRED", 0.65, d),
-        ],
-        "hyperedges": [
-            {"id": "shared_config_dependency", "label": "Shared Config Dependency",
-             "nodes": ["alpha_alpha_service", "beta_beta_component", "docs_config_config_loader"],
-             "relation": "participate_in", "confidence": "INFERRED",
-             "confidence_score": 0.75, "source_file": c},
+            _edge("docs_gamma_gamma_audit_log", "alpha_authentication", "适用", "EXTRACTED", 1.0, g),
+            _edge("alpha_alpha_service", "docs_config_config_loader", "前置", "EXTRACTED", 1.0, c),
+            _edge("beta_beta_component", "docs_config_config_loader", "前置", "EXTRACTED", 1.0, c),
+            _edge("docs_delta_delta_metrics", "docs_config_config_loader", "前置", "EXTRACTED", 1.0, d),
+            _edge("docs_delta_delta_metrics", "docs_gamma_gamma_audit_log", "影响", "INFERRED", 0.65, d),
         ],
         "input_tokens": 0, "output_tokens": 0,
     }

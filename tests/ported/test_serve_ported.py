@@ -22,8 +22,8 @@ def _make_graph() -> nx.Graph:
     G.add_node("n3", label="build", source_file="build.md", source_location=None, community=1)
     G.add_node("n4", label="report", source_file="report.md", source_location=None, community=1)
     G.add_node("n5", label="isolated", source_file="other.md", source_location=None, community=2)
-    G.add_edge("n1", "n2", relation="references", confidence="INFERRED")
-    G.add_edge("n2", "n3", relation="references", confidence="EXTRACTED")
+    G.add_edge("n1", "n2", relation="归属", confidence="INFERRED")
+    G.add_edge("n2", "n3", relation="归属", confidence="EXTRACTED")
     G.add_edge("n3", "n4", relation="uses", confidence="EXTRACTED")
     return G
 

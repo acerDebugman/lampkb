@@ -1,7 +1,7 @@
-# Ported from graphify/tests/test_build_merge_shrink_guard.py and
-# graphify/tests/test_build_merge_hyperedges_and_prune.py.
+# Ported from graphify/tests/test_build_merge_shrink_guard.py.
 # graphify -> kglib; the canned graph layout uses kg-out/ instead of
 # graphify-out/ (kg's output-dir name; _infer_merge_root keys on it).
+# Hyperedge carry-over cases dropped with the hyperedge mechanism itself.
 from __future__ import annotations
 
 import json
@@ -19,18 +19,18 @@ def _node(i: int, sf: str) -> dict:
     return {
         "id": f"{stem}_n{i}",
         "label": f"{sf} node {i}",
-        "file_type": "document",
+        "entity_type": "document",
+        "definition": "",
         "source_file": sf,
         "source_location": f"L{i + 1}",
         "_origin": "ast",
     }
 
 
-def _write_graph(graph_path: Path, nodes, edges=(), hyperedges=()) -> None:
+def _write_graph(graph_path: Path, nodes, edges=()) -> None:
     graph_path.parent.mkdir(parents=True, exist_ok=True)
     graph_path.write_text(
-        json.dumps({"nodes": list(nodes), "edges": list(edges),
-                    "hyperedges": list(hyperedges)}),
+        json.dumps({"nodes": list(nodes), "edges": list(edges)}),
         encoding="utf-8",
     )
 
@@ -119,12 +119,13 @@ def _seed_two_docs(tmp_path) -> Path:
         graph_path,
         nodes=[
             {"id": "foo_widget_cache", "label": "Widget Cache Design",
-             "file_type": "concept", "source_file": "docs/foo.md", "source_location": "L1"},
+             "entity_type": "concept", "definition": "",
+             "source_file": "docs/foo.md", "source_location": "L1"},
             {"id": "bar_other", "label": "Other",
-             "file_type": "concept", "source_file": "docs/bar.md", "source_location": "L1"},
+             "entity_type": "concept", "definition": "",
+             "source_file": "docs/bar.md", "source_location": "L1"},
         ],
         edges=[],
-        hyperedges=[],
     )
     return graph_path
 
@@ -135,7 +136,8 @@ def test_reextracted_file_in_prune_sources_is_not_deleted(tmp_path):
     graph_path = _seed_two_docs(tmp_path)
     new_chunk = {"nodes": [
         {"id": "foo_widget_cache", "label": "Widget Cache Design",
-         "file_type": "concept", "source_file": "docs/foo.md", "source_location": "L2"}
+         "entity_type": "concept", "definition": "",
+         "source_file": "docs/foo.md", "source_location": "L2"}
     ], "edges": []}
 
     G = build_merge([new_chunk], graph_path=str(graph_path),
@@ -150,7 +152,8 @@ def test_genuine_deletion_still_prunes(tmp_path):
     graph_path = _seed_two_docs(tmp_path)
     new_chunk = {"nodes": [
         {"id": "foo_widget_cache", "label": "Widget Cache Design",
-         "file_type": "concept", "source_file": "docs/foo.md", "source_location": "L2"}
+         "entity_type": "concept", "definition": "",
+         "source_file": "docs/foo.md", "source_location": "L2"}
     ], "edges": []}
     # bar.md genuinely deleted (not re-extracted)
     G = build_merge([new_chunk], graph_path=str(graph_path),
@@ -160,40 +163,3 @@ def test_genuine_deletion_still_prunes(tmp_path):
     assert "Widget Cache Design" in labels
 
 
-# ── Hyperedge preservation across incremental updates ──────────────────────
-
-def _seed_two_file_graph(tmp_path):
-    root = tmp_path / "corpus"
-    root.mkdir()
-    graph_path = tmp_path / "graph.json"
-    nodes = [
-        {"id": "a1", "label": "a1", "file_type": "document", "source_file": "a.md"},
-        {"id": "b1", "label": "b1", "file_type": "document", "source_file": "b.md"},
-    ]
-    hyperedges = [
-        {"id": "he_a", "label": "flow A", "source_file": "a.md", "nodes": ["a1"]},
-        {"id": "he_b", "label": "flow B", "source_file": "b.md", "nodes": ["b1"]},
-        {"id": "he_global", "label": "cross-file flow", "nodes": ["a1", "b1"]},  # no source_file
-    ]
-    _write_graph(graph_path, nodes, [], hyperedges)
-    return root, graph_path
-
-
-def _he_ids(G) -> set[str]:
-    return {h["id"] for h in G.graph.get("hyperedges", [])}
-
-
-def test_update_preserves_hyperedges_of_unchanged_files(tmp_path):
-    root, graph_path = _seed_two_file_graph(tmp_path)
-    # Re-extract only b.md, with a fresh hyperedge for it.
-    new_chunk = {
-        "nodes": [{"id": "b1", "label": "b1", "file_type": "document", "source_file": "b.md"}],
-        "edges": [],
-        "hyperedges": [{"id": "he_b_v2", "label": "flow B v2", "source_file": "b.md", "nodes": ["b1"]}],
-    }
-    G = build_merge([new_chunk], graph_path, dedup=False, root=root)
-    ids = _he_ids(G)
-    assert "he_a" in ids           # unchanged file's hyperedge preserved (the bug)
-    assert "he_global" in ids      # source_file-less hyperedge preserved
-    assert "he_b_v2" in ids        # re-extracted file's new hyperedge present
-    assert "he_b" not in ids       # re-extracted file's OLD hyperedge replaced

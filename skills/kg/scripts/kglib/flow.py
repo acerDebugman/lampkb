@@ -35,18 +35,11 @@ def _stamped_manifest_files(
     mechanism applies: leave it unstamped and it is re-queued next run.
 
     Both sides of the membership test are resolved against the scan ``root``
-    before comparing: node/edge/hyperedge ``source_file`` values are
+    before comparing: node/edge ``source_file`` values are
     root-relative on a fresh extraction while ``files_by_type`` entries are
     absolute (from detect()), so a raw string comparison never matched and
     every freshly-extracted semantic doc was dropped from the manifest.
     Mirrors the path normalization in graphify.llm.
-
-    Hyperedges are counted as output: a chunk whose only result for a
-    document is a hyperedge (3+ nodes sharing a concept) is valid output that
-    the semantic cache persists per-``source_file`` — omitting it here left the
-    doc unstamped, so detect_incremental re-queued it on every run. The stamping
-    condition mirrors the cache-write keying (a hyperedge carries its own
-    ``source_file``); do not derive it from member nodes.
 
     ``failed_ast_sources``: code files whose AST extractor errored
     (missing optional extra, etc.) or returned zero nodes. They must not be
@@ -65,7 +58,7 @@ def _stamped_manifest_files(
             return p
 
     sem_extracted: set[Path] = set()
-    for coll in ("nodes", "edges", "hyperedges"):
+    for coll in ("nodes", "edges"):
         for item in sem_result.get(coll, []):
             sf = item.get("source_file", "")
             if sf:
@@ -378,7 +371,7 @@ def run_explain(label: str, *, graph_path: str | None = None) -> int:
     print(
         f"  Source:    {d.get('source_file', '')} {d.get('source_location', '')}".rstrip()
     )
-    print(f"  Type:      {d.get('file_type', '')}")
+    print(f"  Type:      {d.get('entity_type', '')}")
     print(f"  Community: {d.get('community_name') or d.get('community', '')}")
     # Work-memory overlay: a derived experiential hint from `kg reflect`,
     # merged in display-only from the .kg_learning.json sidecar next to

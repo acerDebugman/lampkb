@@ -522,10 +522,10 @@ def _relativize_source_files_in(payload: dict, root: Path) -> None:
     except OSError:
         return
     # raw_calls (#: Pascal/Delphi cross-file inherited-call resolution) carries
-    # source_file the same way nodes/edges/hyperedges do, so it needs the same
+    # source_file the same way nodes/edges do, so it needs the same
     # portable-path treatment for cache entries to round-trip correctly across
     # machines/checkout directories.
-    for bucket in ("nodes", "edges", "hyperedges", "raw_calls"):
+    for bucket in ("nodes", "edges", "raw_calls"):
         for item in payload.get(bucket, []):
             if not isinstance(item, dict):
                 continue
@@ -713,8 +713,8 @@ def _relativize_ids_in(payload: dict, path: "str | Path", root: Path) -> None:
     self-identifying — a long casefolded path slug that nothing but an
     absolute-path-derived id can start with — so this reaches carriers a
     hand-maintained bucket list misses or has yet to grow: ``nodes[].id``,
-    ``edges[].source``/``target``, hyperedge member lists under any of their
-    aliases, ``raw_calls[].caller_nid``, ``swift_extensions[].nid``, plus the
+    ``edges[].source``/``target``, ``raw_calls[].caller_nid``,
+    ``swift_extensions[].nid``, plus the
     path-valued ``edges[].target_file``, ``bash_sources[].source_file`` and
     ``*_type_table.path``, which resolution passes need pointing at the current
     root to reproduce a cold run's edges.
@@ -783,7 +783,7 @@ def _absolutize_source_files_in(payload: dict, root: Path) -> None:
         root_resolved = Path(root).resolve()
     except OSError:
         return
-    for bucket in ("nodes", "edges", "hyperedges", "raw_calls"):
+    for bucket in ("nodes", "edges", "raw_calls"):
         for item in payload.get(bucket, []):
             if not isinstance(item, dict):
                 continue
@@ -952,7 +952,7 @@ def save_cached(path: Path, result: dict, root: Path = Path("."), kind: str = "s
     # silently break those remaps on the first extraction pass.
     #
     # The copy is unconditional (it used to be gated on a non-empty
-    # nodes/edges/hyperedges/raw_calls bucket): a truthiness gate skips the copy
+    # nodes/edges/raw_calls bucket): a truthiness gate skips the copy
     # for a result whose only payload lives in another bucket — an empty
     # ``nodes`` beside a populated ``bash_sources`` — and the id/path anchoring
     # below would then mutate the caller's dict for real.
@@ -1000,10 +1000,10 @@ def check_semantic_cache(
     prompt: "str | Path | None" = None,
     prompt_file: "str | Path | None" = None,
     cache_root: "Path | None" = None,
-) -> tuple[list[dict], list[dict], list[dict], list[str]]:
+) -> tuple[list[dict], list[dict], list[str]]:
     """Check semantic extraction cache for a list of absolute file paths.
 
-    Returns (cached_nodes, cached_edges, cached_hyperedges, uncached_files).
+    Returns (cached_nodes, cached_edges, uncached_files).
     Uncached files need Claude extraction; cached files are merged directly.
 
     ``mode`` selects the cache namespace: ``None`` (the default) reads
@@ -1034,7 +1034,6 @@ def check_semantic_cache(
     kind = "semantic" if mode is None else f"semantic-{mode}"
     cached_nodes: list[dict] = []
     cached_edges: list[dict] = []
-    cached_hyperedges: list[dict] = []
     uncached: list[str] = []
     legacy_before = _legacy_semantic_hits
     corrupt_before = _corrupt_cache_entries
@@ -1048,7 +1047,6 @@ def check_semantic_cache(
         if result is not None:
             cached_nodes.extend(result.get("nodes", []))
             cached_edges.extend(result.get("edges", []))
-            cached_hyperedges.extend(result.get("hyperedges", []))
         else:
             uncached.append(fpath)
 
@@ -1076,11 +1074,11 @@ def check_semantic_cache(
             stacklevel=2,
         )
 
-    return cached_nodes, cached_edges, cached_hyperedges, uncached
+    return cached_nodes, cached_edges, uncached
 
 
 def _group_has_partial_marker(group: dict) -> bool:
-    """True if any node/edge/hyperedge in a per-file group carries the internal
+    """True if any node/edge in a per-file group carries the internal
     ``_partial`` truncation marker set by the adaptive-retry give-up sites.
 
     The marker rides the item dicts up through every chunk merge, so it reaches
@@ -1089,7 +1087,7 @@ def _group_has_partial_marker(group: dict) -> bool:
     an extra argument — the final save would otherwise overwrite a checkpoint's
     ``partial`` flag with a clean-looking entry.
     """
-    for bucket in ("nodes", "edges", "hyperedges"):
+    for bucket in ("nodes", "edges"):
         for item in group.get(bucket, []):
             if isinstance(item, dict) and item.get("_partial"):
                 return True
@@ -1099,7 +1097,6 @@ def _group_has_partial_marker(group: dict) -> bool:
 def save_semantic_cache(
     nodes: list[dict],
     edges: list[dict],
-    hyperedges: list[dict] | None = None,
     root: Path = Path("."),
     merge_existing: bool = False,
     allowed_source_files: Iterable[str | Path] | None = None,
@@ -1180,7 +1177,7 @@ def save_semantic_cache(
             item = {**item, "source_file": norm}
         return item
 
-    by_file: dict[str, dict] = defaultdict(lambda: {"nodes": [], "edges": [], "hyperedges": []})
+    by_file: dict[str, dict] = defaultdict(lambda: {"nodes": [], "edges": []})
     for n in nodes:
         n = _normalized(n)
         src = n.get("source_file", "")
@@ -1191,11 +1188,6 @@ def save_semantic_cache(
         src = e.get("source_file", "")
         if src:
             by_file[src]["edges"].append(e)
-    for h in (hyperedges or []):
-        h = _normalized(h)
-        src = h.get("source_file", "")
-        if src:
-            by_file[src]["hyperedges"].append(h)
 
     def resolved_source_path(value: str | Path) -> Path:
         path = Path(value)
@@ -1224,7 +1216,7 @@ def save_semantic_cache(
         _present = {resolved_source_path(k) for k in by_file}
         for _pp in partial_paths:
             if _pp not in _present:
-                by_file[str(_pp)]  # defaultdict: create an empty {nodes,edges,hyperedges}
+                by_file[str(_pp)]  # defaultdict: create an empty {nodes,edges}
 
     def group_skipped(fpath: str) -> bool:
         """Mirror the write-loop skip condition for one source_file group."""
@@ -1233,13 +1225,12 @@ def save_semantic_cache(
 
     # Dangling-reference pruning. A node group is skipped by the write
     # loop below when its source_file is not a real file (ghost path) or is
-    # out-of-scope per the scope guard — but an edge/hyperedge in an ALLOWED
+    # out-of-scope per the scope guard — but an edge in an ALLOWED
     # group that references a node id from a skipped group used to be written
     # verbatim, so on replay (check_semantic_cache) it dangled forever (the
     # merged-result filter runs AFTER this checkpoint write and is
     # bypassed entirely on replay). Compute the node ids that will be skipped
-    # and drop any to-be-written edge whose endpoint — or hyperedge whose
-    # member (whole-hyperedge drop, mirroring that filter) — references one. Gated
+    # and drop any to-be-written edge whose endpoint references one. Gated
     # on allowed_source_files so unscoped callers stay byte-identical.
     if allowed_paths is not None:
         skipped_ids: set = set()
@@ -1268,19 +1259,10 @@ def save_semantic_cache(
                     # to build-time validation rather than fail the save.
                     return False
 
-            def hyperedge_dangles(h: dict) -> bool:
-                try:
-                    return bool(skipped_ids & set(h.get("nodes") or []))
-                except TypeError:
-                    return False
-
             for fpath, result in by_file.items():
                 if group_skipped(fpath):
                     continue
                 result["edges"] = [e for e in result["edges"] if not edge_dangles(e)]
-                result["hyperedges"] = [
-                    h for h in result["hyperedges"] if not hyperedge_dangles(h)
-                ]
 
     saved = 0
     skipped_not_file = 0
@@ -1315,7 +1297,6 @@ def save_semantic_cache(
                     result = {
                         "nodes": (prev.get("nodes", []) or []) + result["nodes"],
                         "edges": (prev.get("edges", []) or []) + result["edges"],
-                        "hyperedges": (prev.get("hyperedges", []) or []) + result["hyperedges"],
                     }
             else:
                 _prev_partial = False

@@ -23,7 +23,7 @@ def _add(G, *names):
         G.add_node(n, label=n, source_file=f"{n}.md", source_location="L1", community=0)
 
 
-def _link(G, a, b, relation="references", context=None):
+def _link(G, a, b, relation="归属", context=None):
     G.add_edge(a, b, relation=relation, confidence="EXTRACTED", context=context)
 
 
@@ -130,14 +130,14 @@ def test_completion_respects_the_context_filter():
     """The completion pass must scan the filtered graph, never the raw one."""
     G = nx.Graph()
     _add(G, "n1", "n2", "n3")
-    _link(G, "n1", "n2", relation="references", context="call")
-    _link(G, "n1", "n3", relation="cites", context="import")
-    _link(G, "n2", "n3", relation="cites", context="import")
+    _link(G, "n1", "n2", relation="归属", context="call")
+    _link(G, "n1", "n3", relation="阐述", context="import")
+    _link(G, "n2", "n3", relation="阐述", context="import")
 
     filtered = _filter_graph_by_context(G, ["call"])
     _, edges = _bfs(filtered, ["n1", "n2", "n3"], depth=1)
 
-    assert _pairs(edges) == {frozenset(("n1", "n2"))}, "a cites edge came back"
+    assert _pairs(edges) == {frozenset(("n1", "n2"))}, "a 阐述 edge came back"
 
 
 def test_self_loops_are_not_introduced():
@@ -173,7 +173,7 @@ def test_directed_graph_renders_the_seed_to_seed_edge():
 
     text = _query_graph_text(G, "checkout discounted_total", depth=1)
 
-    assert "EDGE checkout --references" in text
+    assert "EDGE checkout --归属" in text
     assert "discounted_total" in text
 
 
@@ -200,7 +200,7 @@ def _write_two_seed_graph(tmp_path):
     G.add_edge(
         "app_checkout",
         "pricing_discounted_total",
-        relation="references",
+        relation="归属",
         confidence="EXTRACTED",
         source_file="app.md",
         source_location="L5",
@@ -218,5 +218,5 @@ def test_query_flow_renders_the_edge_between_two_seeds(tmp_path, capsys):
 
     assert "NODE checkout" in out
     assert "NODE discounted_total" in out
-    assert "EDGE checkout --references" in out
-    assert "discounted_total" in out.split("EDGE checkout --references", 1)[1]
+    assert "EDGE checkout --归属" in out
+    assert "discounted_total" in out.split("EDGE checkout --归属", 1)[1]

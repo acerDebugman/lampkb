@@ -53,136 +53,34 @@ def _is_ast_tier(item: dict) -> bool:
     return isinstance(loc, str) and bool(_AST_LOC_RE.match(loc))
 
 
-# Relations that say only "these two symbols appear together", with no claim about
-# HOW. An extractor that finds a specific fact for a pair — a call, an import, an
-# inheritance — routinely emits one of these for the same pair as well, so when the
-# simple graph collapses the pair to one edge, the generic one must never be the
-# survivor. Deliberately a small denylist rather than a full precedence order over
-# every relation: ranking `contains` against `calls` would be inventing a
-# cross-axis judgement, whereas "specific beats generic" is the only comparison
-# this collapse actually needs.
-_GENERIC_RELATIONS: frozenset[str] = frozenset({"references", "uses", "mentions"})
 
-# Language interop families, keyed by extension, for the cross-language phantom-edge
-# guard in the edge loop below. Families group by REAL interop (JS/TS share a module
-# graph; C/C++/ObjC share a compilation unit via headers; JVM langs share bytecode),
-# so a legitimate TS->JS import or C impl->header call survives, while a Python
-# `import time` binding to a `time.ts` or a cross-language INFERRED `calls`
-# edge is dropped. Kept local to build.py (not imported from extract.py,
-# which imports build.py — a cycle) and deliberately mirrors extract._LANG_FAMILY_BY_EXT.
-_EDGE_LANG_FAMILY: dict[str, str] = {
-    ".py": "py", ".pyi": "py",
-    ".js": "js", ".mjs": "js", ".cjs": "js", ".jsx": "js",
-    ".ts": "js", ".tsx": "js", ".mts": "js", ".cts": "js",
-    ".go": "go", ".rs": "rs",
-    ".java": "jvm", ".kt": "jvm", ".scala": "jvm", ".groovy": "jvm",
-    ".c": "c", ".h": "c", ".cc": "c", ".cpp": "c", ".hpp": "c",
-    ".cxx": "c", ".hh": "c", ".hxx": "c",
-    ".cu": "c", ".cuh": "c", ".metal": "c", ".m": "c", ".mm": "c",
-    ".rb": "rb", ".rake": "rb", ".php": "php", ".cs": "cs", ".swift": "swift", ".lua": "lua",
+# Synonym mapper for entity_type drift. The extraction prompt's type table
+# prints Chinese names next to the English keys, so the common drift is emitting
+# the Chinese name (概念→concept) or a near-miss English form (scenarios→scenario).
+# Anything not in VALID_ENTITY_TYPES and not mapped here is left untouched so
+# validate_extraction reports it — no silent coercion to "concept".
+_ENTITY_TYPE_SYNONYMS = {
+    "概念": "concept",
+    "原理": "principle",
+    "方法": "method",
+    "规则": "rule",
+    "操作": "procedure",
+    "步骤": "procedure",
+    "事实": "fact",
+    "场景": "scenario",
+    "要点": "keypoint",
+    "文档": "document",
+    "concepts": "concept",
+    "methods": "method",
+    "rules": "rule",
+    "facts": "fact",
+    "scenarios": "scenario",
 }
 
-
-# Synonym mapper for known invalid file_type values that LLM subagents commonly
-# emit. Keeps semantic intent close (markdown→document, tool→code) and falls
-# back to "concept" for any other invalid value.
-_FILE_TYPE_SYNONYMS = {
-    "markdown": "document",
-    "text": "document",
-    "tool": "code",
-    "library": "code",
-    "pattern": "concept",
-    "principle": "concept",
-    "constraint": "concept",
-    "tech": "concept",
-    "technology": "concept",
-    "data-source": "concept",
-    "data_source": "concept",
-    "gotcha": "concept",
-    "framework": "concept",
-}
-
-
-# Hyperedge member lists are canonically keyed `nodes` (see graphify/llm.py
-# extraction spec), but LLM/subagent drift and externally-supplied graph.json
-# sometimes emit `members` or `node_ids`. _normalize_hyperedge_members folds
-# those aliases into `nodes` at ingest so every downstream consumer reads one
-# canonical key — mirroring the `from`/`to` edge-endpoint tolerance below.
-_HE_MEMBER_ALIASES = ("members", "node_ids")
-
-
-def _coerce_hyperedge_member_refs(he: dict, members: list) -> list:
-    """Coerce a hyperedge member list to hashable scalar ids, deduped in order.
-
-    LLM/subagent drift sometimes emits a member as an object (``{"id": "a_ts"}``)
-    instead of a bare id string. Left uncoerced, the dict member is unhashable,
-    so the semantic-rekey pass's ``_rekey.get(n, n)`` raised ``TypeError`` and
-    aborted the whole merge — destroying a completed extraction. Object
-    members collapse to their non-empty ``id`` (numeric ids str-coerced via
-    ``_coerce_id``); members with no usable id are dropped with
-    a stderr WARNING naming the hyperedge, never a crash. Hashable scalar refs
-    pass through unchanged. A hyperedge that loses every member this way falls
-    to the existing no-valid-members drop-with-warning in ``build_from_json``.
-    """
-    seen: set = set()
-    coerced: list = []
-    for ref in members:
-        if isinstance(ref, dict):
-            inner = _coerce_id(ref.get("id"))
-            if inner in (None, "") or not _hashable(inner):
-                print(
-                    f"[kg] WARNING: hyperedge "
-                    f"'{he.get('id', '?')}' has a member object with no usable "
-                    f"'id' ({ref!r}); dropping that member.",
-                    file=sys.stderr,
-                )
-                continue
-            ref = inner
-        elif not _hashable(ref):
-            print(
-                f"[kg] WARNING: hyperedge "
-                f"'{he.get('id', '?')}' has an unusable member reference "
-                f"{ref!r}; dropping that member.",
-                file=sys.stderr,
-            )
-            continue
-        if ref in seen:
-            continue
-        seen.add(ref)
-        coerced.append(ref)
-    return coerced
-
-
-def _normalize_hyperedge_members(he: object) -> None:
-    """Canonicalize a hyperedge's member list onto the `nodes` key, in place.
-
-    If `nodes` is already a list it wins (canonical), and only stray alias keys
-    are dropped. Otherwise the first alias (`members`, then `node_ids`) that is a
-    list is moved to `nodes`, with a single stderr WARNING naming the hyperedge
-    id and alias used. Leftover alias keys are always removed so downstream code
-    never re-reads them. Whichever branch supplied the list, member VALUES are
-    coerced to hashable scalar ids and deduped preserving order — see
-    ``_coerce_hyperedge_member_refs``.
-    """
-    if not isinstance(he, dict):
-        return
-    if isinstance(he.get("nodes"), list):
-        he["nodes"] = _coerce_hyperedge_member_refs(he, he["nodes"])
-    else:
-        for alias in _HE_MEMBER_ALIASES:
-            val = he.get(alias)
-            if isinstance(val, list):
-                he["nodes"] = _coerce_hyperedge_member_refs(he, val)
-                print(
-                    f"[kg] WARNING: hyperedge "
-                    f"'{he.get('id', '?')}' uses field '{alias}' instead of "
-                    f"'nodes'; normalizing.",
-                    file=sys.stderr,
-                )
-                break
-    # Drop any leftover alias keys regardless of which branch ran above.
-    for alias in _HE_MEMBER_ALIASES:
-        he.pop(alias, None)
+# Relation drift normalization for the 11 Chinese relations. Starts empty;
+# add observed drift forms here (e.g. an English translation the model emits)
+# as they appear in real extractions.
+_RELATION_SYNONYMS: dict[str, str] = {}
 
 
 def _fold_node_aliases(node: dict) -> None:
@@ -231,7 +129,7 @@ def _coerce_id(value: object) -> object:
 
 def _hashable(value: object) -> bool:
     """True when value can be a dict key / set member (same probe as the
-    inline ``try: hash(m)`` in build_from_json's hyperedge revalidation)."""
+    inline ``try: hash(m)`` in build_from_json's edge-endpoint validation)."""
     try:
         hash(value)
     except TypeError:
@@ -240,7 +138,7 @@ def _hashable(value: object) -> bool:
 
 
 def _coerce_non_string_ids(extraction: dict) -> None:
-    """Coerce numeric node ids and edge/hyperedge references to str, in place.
+    """Coerce numeric node ids and edge references to str, in place.
 
     A backend can emit ``{"id": 10}`` where the schema says ``{"id": "10"}``.
     Every id consumer downstream assumes ``str``, so one int id aborted the build
@@ -252,7 +150,7 @@ def _coerce_non_string_ids(extraction: dict) -> None:
     the same tolerate-and-heal treatment loose backend output already gets at the
     parse chokepoint and in the alias folds.
 
-    Endpoints and hyperedge members are coerced with the nodes, not after: a
+    Endpoints are coerced with the nodes, not after: a
     node-only coercion would renumber ``10`` to ``"10"`` and leave every edge
     pointing at the vanished ``10``, trading a loud crash for a silently
     disconnected graph. The legacy ``from``/``to`` endpoint aliases are included
@@ -276,12 +174,6 @@ def _coerce_non_string_ids(extraction: dict) -> None:
         for key in ("source", "target", "from", "to"):
             if key in edge:
                 edge[key] = _coerce_id(edge[key])
-    for he in extraction.get("hyperedges") or ():
-        if not isinstance(he, dict):
-            continue
-        members = he.get("nodes")
-        if isinstance(members, list):
-            he["nodes"] = [_coerce_id(ref) for ref in members]
 
 
 def _norm_source_file(p: str | None, root: str | None = None) -> str | None:
@@ -776,8 +668,8 @@ def _doc_twin_remap(nodes: list) -> dict[str, str]:
     bare id ``_make_id(path)`` while the semantic pass mints ``<slug>_doc`` for
     the same document. A ``graphify update`` after a semantic build leaves both,
     splitting the file's edges across two disconnected nodes. Canonicalize to the
-    semantic ``_doc`` node (it carries the richer references/hyperedges). Gated to
-    ``file_type == "document"`` on BOTH twins with an identical ``source_file``,
+    semantic ``_doc`` node (it carries the richer edges). Gated to
+    ``entity_type == "document"`` on BOTH twins with an identical ``source_file``,
     so an unrelated code symbol ``foo`` and ``foo_doc`` never merge.
     """
     by_id: dict[str, dict] = {}
@@ -794,7 +686,7 @@ def _doc_twin_remap(nodes: list) -> dict[str, str]:
         sf = node.get("source_file")
         if not sf or bare.get("source_file") != sf:
             continue
-        if node.get("file_type") != "document" or bare.get("file_type") != "document":
+        if node.get("entity_type") != "document" or bare.get("entity_type") != "document":
             continue
         remap[nid[:-4]] = nid
     return remap
@@ -812,17 +704,6 @@ def build_from_json(extraction: dict, *, directed: bool = False, root: str | Pat
     # NetworkX <= 3.1 serialised edges as "links"; remap to "edges" for compatibility.
     if "edges" not in extraction and "links" in extraction:
         extraction = dict(extraction, edges=extraction["links"])
-
-    # Hyperedge persistence is dual-slot: to_json writes BOTH a
-    # top-level `hyperedges` key AND the nested `graph.hyperedges` (node_link
-    # graph attrs), but node_link_data-only writers emit just the nested slot.
-    # Fold the nested slot onto the top-level key ONCE, so every downstream
-    # pass (_coerce_non_string_ids, _normalize_hyperedge_members, the member
-    # revalidation before G.graph["hyperedges"] is set) reads one location.
-    if "hyperedges" not in extraction and isinstance(
-        (extraction.get("graph") or {}).get("hyperedges"), list
-    ):
-        extraction = dict(extraction, hyperedges=extraction["graph"]["hyperedges"])
 
     # Numeric ids from a loose backend become str before anything keys on
     # them — after the links remap so aliased edges are covered too.
@@ -851,23 +732,16 @@ def build_from_json(extraction: dict, *, directed: bool = False, root: str | Pat
         # semantic-rekey / ghost-merge passes below, all of which key on
         # label/source_file and would otherwise skip the node entirely.
         _fold_node_aliases(node)
-        # Default missing/None file_type to "concept" so legacy graph.json
-        # entries (and stub nodes preserved by `_rebuild_code` from older
-        # graphify versions that didn't always populate file_type) don't
-        # trigger spurious "invalid file_type 'None'" validator warnings.
-        if node.get("file_type") in (None, ""):
-            node["file_type"] = "concept"
-        ft = node.get("file_type", "")
-        if ft and ft not in {"code", "document", "paper", "image", "rationale", "concept"}:
-            node["file_type"] = _FILE_TYPE_SYNONYMS.get(ft, "concept")
-
-    # Canonicalize hyperedge member lists: producers sometimes key the
-    # member list `members`/`node_ids` instead of `nodes`. Fold aliases onto
-    # `nodes` here — BEFORE validation and the semantic-rekey loop below — so
-    # every downstream consumer (rekey, source_file relativize, to_json) reads
-    # one canonical key, the same way edge endpoints alias from/to at build.
-    for he in extraction.get("hyperedges", []) or []:
-        _normalize_hyperedge_members(he)
+        # Default missing/None entity_type to "concept" so sparse fragments
+        # don't trigger spurious "invalid entity_type 'None'" validator
+        # warnings. Any other invalid value is left as-is for
+        # validate_extraction to report — silently coercing it to "concept"
+        # used to hide prompt drift.
+        if node.get("entity_type") in (None, ""):
+            node["entity_type"] = "concept"
+        et = node.get("entity_type", "")
+        if et:
+            node["entity_type"] = _ENTITY_TYPE_SYNONYMS.get(et, et)
 
     # Fold legacy edge field aliases (`type`->`relation`,
     # `confidence_score`->`confidence`) BEFORE validation. The existing
@@ -876,6 +750,9 @@ def build_from_json(extraction: dict, *, directed: bool = False, root: str | Pat
     for edge in extraction.get("edges", []):
         if isinstance(edge, dict):
             _fold_edge_aliases(edge)
+            rel = edge.get("relation")
+            if isinstance(rel, str) and rel in _RELATION_SYNONYMS:
+                edge["relation"] = _RELATION_SYNONYMS[rel]
 
     errors = validate_extraction(extraction)
     # Dangling edges (stdlib/external imports) are expected - only warn about real schema errors.
@@ -918,14 +795,6 @@ def build_from_json(extraction: dict, *, directed: bool = False, root: str | Pat
                 edge["source"] = _rekey[edge["source"]]
             if edge.get("target") in _rekey:
                 edge["target"] = _rekey[edge["target"]]
-        for he in extraction.get("hyperedges", []) or []:
-            if isinstance(he, dict) and isinstance(he.get("nodes"), list):
-                # Guard on hashability: _normalize_hyperedge_members
-                # has already coerced members above, but a still-unhashable ref
-                # must pass through rather than abort the merge on dict.get.
-                he["nodes"] = [
-                    _rekey.get(n, n) if _hashable(n) else n for n in he["nodes"]
-                ]
 
     # Merge markdown quick-scan bare doc nodes into their semantic `_doc` twin
     # for the same file, so a document is one node regardless of which pipeline
@@ -950,12 +819,6 @@ def build_from_json(extraction: dict, *, directed: bool = False, root: str | Pat
                     continue
             _new_edges.append(edge)
         extraction["edges"] = _new_edges
-        for he in extraction.get("hyperedges", []) or []:
-            if isinstance(he, dict) and isinstance(he.get("nodes"), list):
-                # Same hashability guard as the _rekey pass above.
-                he["nodes"] = [
-                    _doc_remap.get(n, n) if _hashable(n) else n for n in he["nodes"]
-                ]
 
     G: nx.Graph = nx.DiGraph() if directed else nx.Graph()
     for node in extraction.get("nodes", []):
@@ -1207,41 +1070,6 @@ def build_from_json(extraction: dict, *, directed: bool = False, root: str | Pat
             )
         if "source_file" in attrs:
             attrs["source_file"] = _norm_source_file(attrs["source_file"], _root)
-        # Drop cross-language phantom edges — the same short names (render, parse,
-        # time, ...) recur across language boundaries, so an unresolved target can
-        # bind to a same-named node in another language. The extraction spec forbids
-        # this for `calls`; it is equally invalid for `imports`/`references` (a
-        # Python `import time` must not bind to a `time.ts`).
-        _edge_rel = attrs.get("relation")
-        if _edge_rel in ("calls", "imports", "imports_from", "references"):
-            src_ext = Path(G.nodes[src].get("source_file") or "").suffix.lower()
-            tgt_ext = Path(G.nodes[tgt].get("source_file") or "").suffix.lower()
-            src_fam = _EDGE_LANG_FAMILY.get(src_ext)
-            tgt_fam = _EDGE_LANG_FAMILY.get(tgt_ext)
-            if _edge_rel == "calls":
-                # Unchanged cross-language behavior: only INFERRED calls, and drop as
-                # soon as either family differs (an unknown ext counts as different).
-                if (
-                    attrs.get("confidence") == "INFERRED"
-                    and src_ext and tgt_ext and src_fam != tgt_fam
-                ):
-                    continue
-            else:
-                # imports/references: drop only when BOTH endpoints are known code
-                # languages of different families, so a config->code reference
-                # (unknown ext, e.g. a manifest) is never mistaken for a phantom.
-                if src_fam is not None and tgt_fam is not None and src_fam != tgt_fam:
-                    continue
-        # A file-level import or re-export cannot carry useful connectivity when
-        # both endpoints resolve to the same node.  This most often happens when
-        # the target is an unresolved bare module name (``builtins``, ``poseidon``)
-        # that the legacy-ID alias index above mistakes for the importing file's
-        # own old stem.  It also covers a nested module importing its parent file:
-        # at file-node granularity that relationship necessarily collapses.  Keep
-        # other self-edges, notably recursive ``calls``, because those are real
-        # program structure rather than import-resolution artifacts.
-        if src == tgt and _edge_rel in ("imports", "imports_from", "re_exports"):
-            continue
         # Preserve original edge direction - undirected graphs lose it otherwise,
         # causing display functions to show edges backwards.
         attrs["_src"] = src
@@ -1259,81 +1087,7 @@ def build_from_json(extraction: dict, *, directed: bool = False, root: str | Pat
                 existing.get("_src") == tgt and existing.get("_tgt") == src
             ):
                 continue
-        # A pair that already carries a SPECIFIC relation must not be downgraded
-        # to a generic one. Only one edge survives per pair here, and the sort
-        # above orders same-pair edges by relation name, so "last write wins"
-        # resolved the winner alphabetically — which put `references` after
-        # `calls` and `uses` after everything. On graphify's own corpus that
-        # rewrote all 144 pairs where the extraction found both `calls` and
-        # `references` into plain `references`, and callflow's relation filter
-        # does not include `references`, so those call sites left the call graph
-        # entirely. Alphabetical order carries no meaning; keeping the specific
-        # fact does. The reverse (specific arriving after generic) still
-        # overwrites, so the outcome no longer depends on edge order at all.
-        if G.has_edge(src, tgt):
-            existing_rel = edge_data(G, src, tgt).get("relation")
-            if (
-                attrs.get("relation") in _GENERIC_RELATIONS
-                and existing_rel is not None
-                and existing_rel not in _GENERIC_RELATIONS
-            ):
-                continue
         G.add_edge(src, tgt, **attrs)
-    hyperedges = extraction.get("hyperedges", [])
-    if hyperedges:
-        # Relativize hyperedge source_file the same way nodes and edges are
-        # (above), so to_json — which has no root and writes G.graph["hyperedges"]
-        # verbatim — never leaks an absolute path from a semantic subagent.
-        kept_hyperedges = []
-        for he in hyperedges:
-            if isinstance(he, dict) and he.get("source_file"):
-                he["source_file"] = _norm_source_file(he["source_file"], _root)
-            # Validate members against the built node set: a hyperedge
-            # member absent from the graph used to be copied into
-            # G.graph["hyperedges"] verbatim and reach graph.json dangling,
-            # even from a live (non-cache) extraction. Mirror the pairwise-edge
-            # handling above: remap mismatched ids via normalization first,
-            # then drop members that still don't resolve; drop the hyperedge
-            # itself when no valid member remains (single-member hyperedges
-            # are legal in this codebase, e.g. a per-file flow, so we prune
-            # rather than require two survivors).
-            if isinstance(he, dict) and isinstance(he.get("nodes"), list):
-                valid_members = []
-                for m in he["nodes"]:
-                    try:
-                        hash(m)
-                    except TypeError:
-                        continue
-                    if m not in node_set and isinstance(m, str):
-                        m = norm_to_id.get(_normalize_id(m), m)
-                    if m in node_set:
-                        valid_members.append(m)
-                if not valid_members:
-                    print(
-                        f"[kg] WARNING: dropping hyperedge "
-                        f"{he.get('id', '?')!r} — none of its members "
-                        f"{he.get('nodes')!r} match built nodes.",
-                        file=sys.stderr,
-                    )
-                    continue
-                if valid_members != he["nodes"]:
-                    he["nodes"] = valid_members
-            kept_hyperedges.append(he)
-        if kept_hyperedges:
-            G.graph["hyperedges"] = kept_hyperedges
-        else:
-            # Full wipeout: every incoming hyperedge failed member
-            # revalidation. Store an EXPLICIT empty list — distinct from
-            # "this graph never carried hyperedge metadata" — and say loudly
-            # that the persisted set is about to be emptied, so the per-edge
-            # warnings above can't scroll past unnoticed.
-            G.graph["hyperedges"] = []
-            print(
-                f"[kg] WARNING: all {len(hyperedges)} hyperedge(s) were "
-                f"dropped by member revalidation; graph.json's hyperedge set "
-                f"will be emptied on the next export.",
-                file=sys.stderr,
-            )
     # Runs LAST, after the alias-competition above (which relies on file-node
     # labels still being bare basenames): give colliding-basename file nodes a
     # directory-qualified display label so lookup/discovery can disambiguate
@@ -1366,11 +1120,10 @@ def build(
     collisions remain isolated and are reported.
     """
     from kglib.dedup import deduplicate_entities
-    combined: dict = {"nodes": [], "edges": [], "hyperedges": [], "input_tokens": 0, "output_tokens": 0}
+    combined: dict = {"nodes": [], "edges": [], "input_tokens": 0, "output_tokens": 0}
     for ext in extractions:
         combined["nodes"].extend(ext.get("nodes", []))
         combined["edges"].extend(ext.get("edges", []))
-        combined["hyperedges"].extend(ext.get("hyperedges", []))
         combined["input_tokens"] += ext.get("input_tokens", 0)
         combined["output_tokens"] += ext.get("output_tokens", 0)
     if dedup and combined["nodes"]:
@@ -1388,9 +1141,6 @@ def build(
         combined["nodes"], combined["edges"] = deduplicate_entities(
             combined["nodes"], combined["edges"], communities={},
             dedup_llm_backend=dedup_llm_backend, root=root,
-            # Hyperedge members reference node ids too, so they need the same
-            # survivor rewiring the edges get.
-            hyperedges=combined.get("hyperedges"),
         )
     return build_from_json(combined, directed=directed, root=root)
 
@@ -1412,10 +1162,10 @@ def deduplicate_by_label(nodes: list[dict], edges: list[dict]) -> tuple[list[dic
     Dormant: this is NOT wired into ``build()`` — the active dedup path is
     ``deduplicate_entities`` (imported and called in ``build``), which supersedes
     it. The previous "Called in build() automatically" note was never true. It
-    also merges by label alone with no ``file_type`` guard, so it must not be
-    enabled for code nodes: same-label symbols from different files/packages
-    (e.g. two ``Account`` types) would collapse into one — the cross-file
-    conflation ``deduplicate_entities`` deliberately avoids for code.
+    also merges by label alone with no ``entity_type`` guard, so it must not be
+    enabled blindly: same-label entities from different sources (e.g. two
+    ``Account`` mentions) would collapse into one — the conflation
+    ``deduplicate_entities`` deliberately avoids.
     """
     _CHUNK_SUFFIX = re.compile(r"_c\d+$")
     canonical: dict[str, dict] = {}  # norm_label -> surviving node
@@ -1457,8 +1207,8 @@ def deduplicate_by_label(nodes: list[dict], edges: list[dict]) -> tuple[list[dic
     return deduped_nodes, deduped_edges
 
 
-def _load_existing_graph(graph_path: Path) -> "tuple[list, list, list, bool] | None":
-    """Load (nodes, edges, hyperedges, directed) from an existing graph.json for
+def _load_existing_graph(graph_path: Path) -> "tuple[list, list, bool] | None":
+    """Load (nodes, edges, directed) from an existing graph.json for
     an incremental merge, accepting both the ``links`` and ``edges`` spellings.
 
     Reads the JSON directly instead of going through node_link_graph().
@@ -1502,7 +1252,6 @@ def _load_existing_graph(graph_path: Path) -> "tuple[list, list, list, bool] | N
     return (
         nodes,
         edges,
-        list(data.get("hyperedges", [])),
         bool(data.get("directed", False)),
     )
 
@@ -1520,14 +1269,14 @@ def merge_raw_extraction(
     clustered incremental paths can't drift:
 
     - sources re-extracted this run REPLACE their prior contribution PER TIER:
-      existing nodes/edges/hyperedges owned by them are dropped
+      existing nodes/edges owned by them are dropped
       only when the new extraction contains the same tier (AST vs semantic,
       per :func:`_is_ast_tier`) for that source, matched in both raw and
       :func:`_norm_source_file` form;
     - ``prune_sources`` (deleted / excluded / graph-stale files) are dropped,
       with the ``_abs_identity`` third-form fallback, and "replace" wins
       over a contradictory "delete" of a re-extracted source;
-    - everything else — nodes/edges/hyperedges owned by unchanged files — is
+    - everything else — nodes/edges owned by unchanged files — is
       carried forward unchanged.
 
     Survivors are PREPENDED to ``new``'s lists (existing-first), so the caller's
@@ -1543,7 +1292,7 @@ def merge_raw_extraction(
     loaded = _load_existing_graph(graph_path)
     if loaded is None:
         return new
-    existing_nodes, existing_edges, existing_hyperedges, _ = loaded
+    existing_nodes, existing_edges, _ = loaded
 
     _eff_root = (
         str(Path(root).resolve()) if root is not None
@@ -1593,7 +1342,7 @@ def merge_raw_extraction(
     if prune_set or prune_abs:
         _stored_sfs = {
             item.get("source_file")
-            for seq in (existing_nodes, existing_edges, existing_hyperedges)
+            for seq in (existing_nodes, existing_edges)
             for item in seq if isinstance(item, dict)
         }
         _stored_sfs.discard(None)
@@ -1610,9 +1359,7 @@ def merge_raw_extraction(
             return True
         sf = item.get("source_file")
         # Tier-scoped replace: an item is superseded only when ITS OWN tier
-        # re-extracted its source. Hyperedges are semantic-tier (no _origin,
-        # null source_location), so an AST-only re-extract carries them.
-        # Deletion pruning below stays tier-blind.
+        # re-extracted its source. Deletion pruning below stays tier-blind.
         own = new_ast_sources if _is_ast_tier(item) else new_sem_sources
         if sf in own or _norm_source_file(sf, _eff_root) in own:
             return True  # re-extracted this run — replaced by the new chunk
@@ -1622,9 +1369,6 @@ def merge_raw_extraction(
 
     new["nodes"] = [n for n in existing_nodes if not _dropped(n)] + list(new.get("nodes", []))
     new["edges"] = [e for e in existing_edges if not _dropped(e)] + list(new.get("edges", []))
-    carried_hyper = [he for he in existing_hyperedges if not _dropped(he)]
-    if carried_hyper or new.get("hyperedges"):
-        new["hyperedges"] = carried_hyper + list(new.get("hyperedges", []))
     return new
 
 
@@ -1657,12 +1401,11 @@ def build_merge(
     graph_path = Path(graph_path if graph_path is not None else _default_graph_json())
     _loaded = _load_existing_graph(graph_path)
     if _loaded is not None:
-        existing_nodes, existing_edges, existing_hyperedges, existing_directed = _loaded
+        existing_nodes, existing_edges, existing_directed = _loaded
         had_graph = True
     else:
         existing_nodes = []
         existing_edges = []
-        existing_hyperedges = []
         existing_directed = False
         had_graph = False
     if directed is None:
@@ -1755,7 +1498,7 @@ def build_merge(
     _matched_prune_entries: set[str] = set()
 
     def _prune_match(sf: "str | None") -> bool:
-        # Match a node/edge/hyperedge source_file against the prune set in a
+        # Match a node/edge source_file against the prune set in a
         # form-insensitive way: exact string, normalised-relative, then the
         # absolute-identity fallback for the third-form case. Records
         # WHICH prune entry matched, so the prune report can count only the
@@ -1781,12 +1524,11 @@ def build_merge(
     # prune would silently no-op. Derive the root by suffix-matching the
     # absolute prune paths against the stored relative source_files and redo
     # the prune sets with it; on ambiguity fall through to the zero-match
-    # warning below. Runs before the hyperedge carry so hyperedge pruning
-    # benefits too.
+    # warning below.
     if prune_set or prune_abs:
         _stored_sfs = {
             item.get("source_file")
-            for seq in (_disk_nodes, existing_edges, existing_hyperedges)
+            for seq in (_disk_nodes, existing_edges)
             for item in seq if isinstance(item, dict)
         }
         _stored_sfs.discard(None)
@@ -1797,33 +1539,6 @@ def build_merge(
                 prune_set, prune_abs = _build_prune_sets(
                     prune_sources, _prune_root, new_sources
                 )
-
-    # Carry forward hyperedges from files that were neither re-extracted nor
-    # deleted. build() only sees the new chunks' hyperedges, so without
-    # this every --update collapses the graph's hyperedge set down to just the
-    # changed files'. Re-extracted files' prior hyperedges are dropped (their new
-    # version is already in G — replace-per-source, like nodes/edges); deleted
-    # files' are dropped via prune_set. id-dedup (attach_hyperedges) so a carried
-    # hyperedge never duplicates one the new chunks re-emitted. Mirrors watch.py,
-    # which already preserves existing hyperedges across a rebuild.
-    if existing_hyperedges:
-        carried = []
-        for he in existing_hyperedges:
-            if not isinstance(he, dict):
-                continue
-            sf = he.get("source_file")
-            norm = _norm_source_file(sf, _eff_root)
-            # Hyperedges are semantic-tier: only a SEMANTIC re-extract of the
-            # source replaces them. An AST-only re-extract cannot regenerate
-            # hyperedges, so dropping them there would be data loss.
-            if sf in new_sem_sources or norm in new_sem_sources:
-                continue  # semantically re-extracted — replaced by the new chunk's version
-            if _prune_match(sf):
-                continue  # deleted — pruned
-            carried.append(he)
-        if carried:
-            from kglib.export import attach_hyperedges
-            attach_hyperedges(G, carried)
 
     # Prune nodes and edges from deleted source files
     if prune_sources:
@@ -1863,10 +1578,10 @@ def build_merge(
         # information.
         #
         # A single pass suffices: external-import stubs are only ever edge
-        # TARGETS (extractors mint them as the target of an imports_from/
-        # references/inherits edge, never as a source), so removing one can
-        # never drop another to degree 0. A future extractor emitting a
-        # stub->stub edge would require iterating this to a fixpoint.
+        # TARGETS (extractors mint them as the target of a stub edge, never
+        # as a source), so removing one can never drop another to degree 0.
+        # A future extractor emitting a stub->stub edge would require
+        # iterating this to a fixpoint.
         orphaned = [
             n for n, d in G.nodes(data=True)
             if not d.get("source_file")
@@ -1953,7 +1668,7 @@ def build_merge(
             return (
                 isinstance(nid, str)
                 and not nid.endswith("_doc")
-                and n.get("file_type") == "document"
+                and n.get("entity_type") == "document"
                 and f"{nid}_doc" in G
                 and G.nodes[f"{nid}_doc"].get("source_file") == n.get("source_file")
             )
